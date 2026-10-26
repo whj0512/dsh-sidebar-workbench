@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="980" viewBox="0 0 1560 980" role="img" aria-labelledby="title desc">
+<title id="title">需求建模工作台布局设计</title>
+<desc id="desc">左侧为宽视图流程概览，右侧为窄侧栏功能运行详情。一个 DSH 工作区对应一个建模项目，根目录继承工作区。所有内容为演示数据。</desc>
+<style>text{font-family:Microsoft YaHei, Noto Sans CJK SC, sans-serif;fill:#273345} .muted{fill:#64748b} .small{font-size:13px} .body{font-size:15px} .label{font-size:17px;font-weight:500} .title{font-size:25px;font-weight:500}</style>
+<rect x="0" y="0" width="1560" height="980" rx="0" fill="#f2f5f9" stroke="none"/>
+<text x="40" y="52" class="title">需求建模工作台</text>
+<text x="40" y="82" class="body" style="fill:#64748b">一个 DSH 工作区对应一个建模项目 · 工作台跟随当前会话所属工作区 · 演示数据</text>
+<text x="40" y="125" class="label">宽视图 / 流程概览</text>
+<text x="1110" y="125" class="label">窄侧栏 / 功能运行详情</text>
+<rect x="40" y="146" width="1038" height="755" rx="12" fill="#fff" stroke="#d8e0ea"/>
+<rect x="1110" y="146" width="410" height="755" rx="12" fill="#fff" stroke="#d8e0ea"/>
+<text x="60" y="178" class="body">▤  需求建模工作台</text>
+<text x="1001" y="178" class="body">···   ×</text>
+<path d="M40 195H1078" stroke="#e3e8ef"/>
+<text x="64" y="231" class="label">整车控制需求</text>
+<rect x="226" y="212" width="42" height="25" rx="5" fill="#edf2ff" stroke="none"/>
+<text x="235" y="230" class="small" style="fill:#355ee8">V2</text>
+<text x="284" y="231" class="small" style="fill:#64748b">当前 DSH 工作区 · 项目根目录只读继承</text>
+<rect x="956" y="207" width="96" height="36" rx="7" fill="#fff" stroke="#d9e1eb"/>
+<text x="968" y="231" class="small" style="fill:#39475d">建模设置</text>
+<text x="64" y="276" class="body" style="fill:#355ee8">建模流程</text>
+<text x="170" y="276" class="body" style="fill:#64748b">模型</text>
+<text x="250" y="276" class="body" style="fill:#64748b">测试用例</text>
+<text x="356" y="276" class="body" style="fill:#64748b">知识图谱</text>
+<rect x="64" y="288" width="64" height="3" rx="1" fill="#355ee8" stroke="none"/>
+<path d="M64 295H1054" stroke="#e3e8ef"/>
+<text x="64" y="333" class="label">项目建模进度</text>
+<text x="849" y="333" class="small" style="fill:#64748b">运行记录   产物目录</text>
+<text x="64" y="362" class="body" style="fill:#64748b">12 个功能 · 8 个已完成 · 2 个运行中 · 2 个待处理</text>
+<rect x="64" y="389" width="320" height="181" rx="9" fill="#fff" stroke="#dce3ec"/>
+<text x="80" y="418" class="small" style="fill:#64748b">01</text>
+<text x="110" y="420" class="label">文档条目化</text>
+<rect x="80" y="438" width="83" height="25" rx="5" fill="#ecf7f0" stroke="none"/>
+<text x="89" y="456" class="small" style="fill:#28774b">已采用</text>
+<text x="80" y="495" class="small" style="fill:#64748b">12 个功能条目 · V2</text>
+<rect x="80" y="515" width="104" height="36" rx="7" fill="#fff" stroke="#d9e1eb"/>
+<text x="92" y="539" class="small" style="fill:#39475d">查看条目</text>
+<rect x="399" y="389" width="320" height="181" rx="9" fill="#fff" stroke="#dce3ec"/>
+<text x="415" y="418" class="small" style="fill:#64748b">02</text>
+<text x="445" y="420" class="label">单功能建模</text>
+<rect x="415" y="438" width="83" height="25" rx="5" fill="#edf2ff" stroke="none"/>
+<text x="424" y="456" class="small" style="fill:#355ee8">运行中</text>
+<text x="415" y="495" class="small" style="fill:#64748b">2 个功能正在建模</text>
+<rect x="415" y="515" width="104" height="36" rx="7" fill="#355ee8" stroke="#355ee8"/>
+<text x="427" y="539" class="small" style="fill:#fff">选择功能</text>
+<rect x="734" y="389" width="320" height="181" rx="9" fill="#fff" stroke="#dce3ec"/>
+<text x="750" y="418" class="small" style="fill:#64748b">03</text>
+<text x="780" y="420" class="label">本体关系管理</text>
+<rect x="750" y="438" width="83" height="25" rx="5" fill="#eff2f6" stroke="none"/>
+<text x="759" y="456" class="small" style="fill:#59677b">尚未运行</text>
+<text x="750" y="495" class="small" style="fill:#64748b">先选择已验证模型范围</text>
+<rect x="750" y="515" width="104" height="36" rx="7" fill="#fff" stroke="#d9e1eb"/>
+<text x="762" y="539" class="small" style="fill:#39475d">本地校验</text>
+<text x="64" y="612" class="label">待处理事项</text>
+<text x="934" y="612" class="small" style="fill:#355ee8">查看全部</text>
+<rect x="64" y="628" width="990" height="54" rx="7" fill="#fff9ee" stroke="none"/>
+<rect x="78" y="643" width="52" height="25" rx="5" fill="#fff5e5" stroke="none"/>
+<text x="87" y="661" class="small" style="fill:#946414">阻塞</text>
+<text x="146" y="660" class="body">OnePedal 驾驶模式：2 项需求未覆盖，测试生成已停止</text>
+<text x="967" y="660" class="small" style="fill:#946414">查看问题</text>
+<text x="64" y="718" class="label">最近功能运行</text>
+<text x="64" y="752" class="small" style="fill:#64748b">功能名称</text>
+<text x="450" y="752" class="small" style="fill:#64748b">当前阶段</text>
+<text x="720" y="752" class="small" style="fill:#64748b">结果</text>
+<text x="925" y="752" class="small" style="fill:#64748b">输入版本</text>
+<path d="M64 765H1054" stroke="#e3e8ef"/>
+<text x="64" y="793" class="body">全地形扭矩控制</text>
+<text x="450" y="793" class="small">DSL 对齐</text>
+<rect x="720" y="775" width="70" height="25" rx="5" fill="#edf2ff" stroke="none"/>
+<text x="729" y="793" class="small" style="fill:#355ee8">运行中</text>
+<text x="941" y="793" class="small">V2</text>
+<path d="M64 808H1054" stroke="#e3e8ef"/>
+<text x="64" y="834" class="body">普通驾驶模式</text>
+<text x="450" y="834" class="small">测试设计</text>
+<rect x="720" y="815" width="70" height="25" rx="5" fill="#ecf7f0" stroke="none"/>
+<text x="729" y="833" class="small" style="fill:#28774b">已完成</text>
+<text x="941" y="834" class="small">V2</text>
+<rect x="41" y="858" width="1036" height="42" rx="9" fill="#f7f9fc" stroke="none"/>
+<text x="64" y="884" class="small" style="fill:#64748b">●  2 个任务运行中 · 关闭工作台不会取消任务</text>
+<text x="955" y="884" class="small" style="fill:#355ee8">查看队列</text>
+<text x="1128" y="178" class="body">▤  需求建模工作台</text>
+<text x="1473" y="178" class="body">···</text>
+<path d="M1110 195H1520" stroke="#e3e8ef"/>
+<text x="1128" y="231" class="label">整车控制需求</text>
+<text x="1128" y="253" class="small" style="fill:#64748b">当前工作区 · 根目录只读继承</text>
+<rect x="1378" y="211" width="42" height="25" rx="5" fill="#edf2ff" stroke="none"/>
+<text x="1387" y="229" class="small" style="fill:#355ee8">V2</text>
+<text x="1466" y="231" class="label">···</text>
+<text x="1128" y="275" class="body" style="fill:#355ee8">流程</text>
+<text x="1211" y="275" class="body" style="fill:#64748b">模型</text>
+<text x="1294" y="275" class="body" style="fill:#64748b">测试</text>
+<text x="1377" y="275" class="body" style="fill:#64748b">图谱</text>
+<rect x="1128" y="288" width="32" height="3" rx="1" fill="#355ee8" stroke="none"/>
+<path d="M1128 295H1502" stroke="#e3e8ef"/>
+<text x="1128" y="327" class="small" style="fill:#355ee8">‹ 返回功能列表</text>
+<text x="1128" y="365" class="label">OnePedal 驾驶模式</text>
+<text x="1128" y="392" class="small" style="fill:#64748b">来源 3.2.1  ·  输入 V2  ·  运行 R-018</text>
+<rect x="1128" y="414" width="28" height="25" rx="5" fill="#ecf7f0" stroke="none"/>
+<text x="1137" y="432" class="small" style="fill:#28774b">1</text>
+<text x="1170" y="432" class="body">原文解析</text>
+<rect x="1378" y="414" width="70" height="25" rx="5" fill="#ecf7f0" stroke="none"/>
+<text x="1387" y="432" class="small" style="fill:#28774b">已完成</text>
+<rect x="1128" y="460" width="28" height="25" rx="5" fill="#ecf7f0" stroke="none"/>
+<text x="1137" y="478" class="small" style="fill:#28774b">2</text>
+<text x="1170" y="478" class="body">DSL 建模</text>
+<rect x="1378" y="460" width="70" height="25" rx="5" fill="#ecf7f0" stroke="none"/>
+<text x="1387" y="478" class="small" style="fill:#28774b">已完成</text>
+<rect x="1128" y="506" width="28" height="25" rx="5" fill="#fff5e5" stroke="none"/>
+<text x="1137" y="524" class="small" style="fill:#946414">3</text>
+<text x="1170" y="524" class="body">对齐复验</text>
+<rect x="1378" y="506" width="70" height="25" rx="5" fill="#fff5e5" stroke="none"/>
+<text x="1387" y="524" class="small" style="fill:#946414">阻塞</text>
+<rect x="1128" y="552" width="28" height="25" rx="5" fill="#eff2f6" stroke="none"/>
+<text x="1137" y="570" class="small" style="fill:#59677b">4</text>
+<text x="1170" y="570" class="body">测试设计</text>
+<rect x="1378" y="552" width="120" height="25" rx="5" fill="#eff2f6" stroke="none"/>
+<text x="1387" y="570" class="small" style="fill:#59677b">等待前置检查</text>
+<path d="M1128 600H1502" stroke="#e3e8ef"/>
+<text x="1128" y="633" class="body" style="fill:#355ee8">问题 2</text>
+<text x="1234" y="633" class="body" style="fill:#64748b">产物</text>
+<text x="1323" y="633" class="body" style="fill:#64748b">执行记录</text>
+<rect x="1128" y="652" width="374" height="125" rx="8" fill="#fff9ee" stroke="none"/>
+<text x="1142" y="679" class="small" style="fill:#946414">ExternalScenario · 条件表达式无法解析</text>
+<text x="1142" y="706" class="small">REQ-012 → 原文段落 → DSL 位置</text>
+<text x="1142" y="732" class="small" style="fill:#64748b">保留原有业务条件，修订后重新校验</text>
+<text x="1142" y="759" class="small" style="fill:#355ee8">查看原文          查看模型</text>
+<rect x="1128" y="797" width="102" height="36" rx="7" fill="#fff" stroke="#d9e1eb"/>
+<text x="1140" y="821" class="small" style="fill:#39475d">补充要求</text>
+<rect x="1362" y="797" width="140" height="36" rx="7" fill="#355ee8" stroke="#355ee8"/>
+<text x="1374" y="821" class="small" style="fill:#fff">重新对齐</text>
+<rect x="1111" y="858" width="408" height="42" rx="9" fill="#f7f9fc" stroke="none"/>
+<text x="1128" y="884" class="small" style="fill:#64748b">2 个任务运行中</text>
+<text x="1425" y="884" class="small" style="fill:#355ee8">查看队列</text>
+<text x="40" y="939" class="body" style="fill:#64748b">绑定约定：工作区决定项目；同工作区共享成果，跨工作区切换视图，已启动任务始终使用固定目录。</text>
+</svg>

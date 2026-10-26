@@ -1,0 +1,100 @@
+{
+  "name": "dsh-plugin-sidebar-workbench",
+  "version": "0.1.0",
+  "description": "A native right-sidebar workbench page for DeepSeek Harness Web.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": "0.2.1-rc.3"
+  },
+  "packageManager": "pnpm@11.28.5",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-api-gateway"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && tsdown",
+    "build:check": "tsc -p tsconfig.check.json",
+    "typecheck": "tsc -b && pnpm run build:check",
+    "watch": "tsdown --watch",
+    "test": "vitest run",
+    "test:artifact": "node --test tests/artifact.test.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.3"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "link:../deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-api-gateway": "link:../deepseek-harness/packages/api/gateway",
+    "@deepseek-ai/dsh-api-remote-access": "link:../deepseek-harness/packages/api/remote-access",
+    "@deepseek-ai/dsh-api-workspace-controller": "link:../deepseek-harness/packages/api/workspace-controller",
+    "@deepseek-ai/dsh-brand": "link:../deepseek-harness/packages/util/brand",
+    "@deepseek-ai/dsh-client-locale": "link:../deepseek-harness/packages/client/locale",
+    "@deepseek-ai/dsh-client-store": "link:../deepseek-harness/packages/client/store",
+    "@deepseek-ai/dsh-client-ui-primitives": "link:../deepseek-harness/packages/client/ui-primitives",
+    "@deepseek-ai/dsh-client-ui-renderer": "link:../deepseek-harness/packages/client/ui-renderer",
+    "@deepseek-ai/dsh-client-ui-session": "link:../deepseek-harness/packages/client/ui-session",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "link:../deepseek-harness/packages/client/ui-sidebar-right",
+    "@deepseek-ai/dsh-client-ui-slots": "link:../deepseek-harness/packages/client/ui-slots",
+    "@deepseek-ai/dsh-session": "link:../deepseek-harness/packages/core/session",
+    "@deepseek-ai/dsh-storage-domain": "link:../deepseek-harness/packages/storage/storage-domain",
+    "@deepseek-ai/dsh-typert-protocol": "link:../deepseek-harness/packages/typert/protocol",
+    "@deepseek-ai/dsh-typert-registry": "link:../deepseek-harness/packages/typert/registry",
+    "@deepseek-ai/dsh-workspace": "link:../deepseek-harness/packages/workspace/workspace",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.1",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "jsdom": "29.1.1",
+    "lightningcss": "^1.33.0",
+    "playwright": "^1.58.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  }
+}

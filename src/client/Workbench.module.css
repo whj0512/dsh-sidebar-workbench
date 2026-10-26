@@ -1,0 +1,29 @@
+.root { container-type: inline-size; display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; color: var(--dsw-alias-label-primary); font-size: 13px; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; }
+.root h1 { font-size: 20px; font-weight: 500; margin: 0; }
+.root h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+.root h3 { font-size: 13px; font-weight: 500; }
+.root p { line-height: 1.6; overflow-wrap: anywhere; }
+.root details { padding: 8px 16px; }
+.root summary { cursor: pointer; min-height: 32px; }
+.mode, .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mode { padding: 0 16px; }
+.notice { margin: 12px 16px; padding: 12px; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); }
+.body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
+.card { border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); padding: 16px; margin-bottom: 12px; min-width: 0; }
+.pipeline { display: grid; gap: 12px; }
+.pipeline .card { margin: 0; }
+.muted, .path { color: var(--dsw-alias-label-secondary); }
+.path { overflow-wrap: anywhere; }
+.root label { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+.root .row { flex-direction: row; flex-wrap: wrap; align-items: center; min-height: 40px; }
+.row span { margin-left: auto; }
+.root textarea, .root select { max-width: 100%; box-sizing: border-box; padding: 8px; font: inherit; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); }
+.root textarea { min-height: 88px; resize: vertical; }
+.root pre { overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
+.stages { padding-left: 20px; }
+.stages li { padding: 8px 0; }
+.stages span { margin-left: 12px; color: var(--dsw-alias-label-secondary); }
+.footer { border-top: .5px solid var(--dsw-alias-border-l3); padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+@container (min-width: 900px) { .pipeline { grid-template-columns: repeat(3, minmax(0, 1fr)); } .body { padding: 24px; } }
+@media (pointer: coarse) { .root input, .root textarea, .root select { font-size: 16px; } }

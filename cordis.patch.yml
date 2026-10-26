@@ -1,0 +1,3 @@
+- insert:
+    - id: sidebar-workbench
+      name: dsh-plugin-sidebar-workbench
