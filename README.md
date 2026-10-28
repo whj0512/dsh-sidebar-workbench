@@ -36,11 +36,15 @@ pnpm dsh --profile sidebar-workbench-dev --port 3081
 dsh-sidebar-workbench/
   src/index.ts                 Host 发现入口
   src/client/index.ts          注册与清理
-  src/client/definition.ts     tab 与开始页入口
-  src/client/Workbench.tsx     计数页面
-  src/client/WorkbenchTitle.tsx
-  src/client/locales.ts        中英文文案
-  src/client/Workbench.module.css
+  src/client/Workbench.tsx     工作台页面协调
+  src/client/workbench-types.ts Slot 注入类型
+  src/client/shell/            tab 定义、标题、导航与流程入口
+  src/client/project/          项目信息与材料初始化表单
+  src/client/models/           模型选择与预览
+  src/client/runs/             运行、授权与产物展示
+  src/client/state/            数据投影、视图状态与草稿保护
+  src/client/i18n/             typed locale 中英文文案
+  src/client/styles/           工作台 CSS Modules
   cordis.patch.yml             profile 安装层
   tsdown.config.ts             独立 Host/Client 构建
   tests/                      组件、生命周期和产物测试
@@ -113,3 +117,17 @@ pnpm dsh plugin --profile sidebar-workbench-dev remove dsh-plugin-sidebar-workbe
 ## 模型体验
 
 无模型可见变化：不注册工具、不增加提示词、不追加 Session event，也不发起模型请求。计数仅存在于页面内存中。
+
+## 工作台控件样式
+
+工作台采用蓝白主色：蓝色主操作与选中导航、浅蓝内容背景、白色项目和流程卡片；暗色模式继续跟随宿主主题。三条流水线以编号步骤和连接线展示。控件复用宿主 Button、Input、Menu 与 SegmentedTabs，视觉覆盖限制在页面 CSS Modules 内，保留禁用行为与键盘操作。源码修改后执行 `pnpm run build` 和 `pnpm run build:check`，重启链接此目录的 Host 并刷新页面。
+
+本次控件样式验证见 [样式验证记录](docs/控件样式验证记录.md)。
+
+初始化表单支持逐字段错误定位；项目和运行状态使用辅助技术播报。非空修订草稿会启用浏览器离开提醒，草稿仍只保存在原有内存视图状态中；强制退出及不支持 beforeunload 的环境不能保证提醒。关闭侧边栏不会自动清空草稿。
+
+## React 组件结构
+
+`Workbench.tsx` 负责 Slot 数据接入、工作区视图选择和命令协调；各功能按 `shell`、`project`、`models`、`runs` 分组，数据和视图状态集中在 `state`。Slot 注入类型集中在 `workbench-types.ts`。逐文件职责、阅读顺序和修改位置见 [Client 代码导航](src/client/README.md)。
+
+展示组件通过 props 接收数据，使用稳定回调与 `memo` 隔离无关草稿输入。产物列表和待授权运行只在对应页面中派生；草稿离开保护仅在草稿是否为空发生变化时更新。状态仍由原有 Slot store 和 WorkbenchData 持有，未改变状态字段、存储方式或执行授权。检查结果与人工核验步骤见 [React 结构优化记录](docs/React结构优化记录.md)。

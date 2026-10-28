@@ -2,7 +2,7 @@
 /** Controlled adapter outcomes; no timers, model, files or remote service. */
 import { describe, expect, it } from 'vitest'
 import { DemoExecutor, authorized, blockers, operations, type StartRequest, type ProjectId, type Run } from '../src/shared/workflow.ts'
-import { demoInputs } from '../src/client/data.ts'
+import { demoInputs } from '../src/client/state/data.ts'
 const request = (patch: Partial<StartRequest> = {}): StartRequest => ({ key: 'one',
   binding: { workspaceId: 'w1', projectId: 'demo:p1' as ProjectId, revision: 1, root: 'demo:/one', valid: true },
   operation: 'model', inputs: demoInputs, scope: ['OnePedal'], target: 'demo:graph', repository: 'requirement', scenario: 'success', ...patch })

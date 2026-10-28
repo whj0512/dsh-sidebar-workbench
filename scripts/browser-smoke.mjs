@@ -71,7 +71,7 @@ try {
         assert.equal(await page.getByRole('button', { name: copy.entry }).count(), 0)
         assert.equal(await page.locator('style[data-plugin="dsh-plugin-sidebar-workbench"]').count(), 0)
         assert.deepEqual(errors.filter(error => !error.startsWith('[deepseek-account] account read failed')), [])
-        await page.screenshot({ path: resolve(output, `${copy.locale}-uninstalled.png`) })
+        await page.screenshot({ animations: 'disabled',  path: resolve(output, `${copy.locale}-uninstalled.png`) })
         report.checks.push({ locale: copy.locale, result: 'passed', scenarios: ['entry removed', 'stylesheet removed'], errors })
         continue
       }
@@ -85,12 +85,14 @@ try {
       const body = page.getByRole('region', { name: copy.title, exact: true })
       const zh = copy.locale === 'zh-CN';
       await body.getByText(fixtureName,{exact:true}).waitFor();
+      await body.screenshot({animations:'disabled',path:resolve(output,copy.locale+'-flow.png')});
       const init = zh ? '在当前工作区初始化' : 'Initialize in this workspace';
       await body.getByRole('button',{name:init,exact:true}).click();
       await body.getByLabel(zh ? '原始 PDF / DOCX（项目内相对路径）' : 'Original PDF / DOCX (project-relative path)').fill('source.pdf');
       await body.getByLabel(zh ? '同版 MinerU Markdown（项目内相对路径）' : 'Matching MinerU Markdown (project-relative path)').fill('source.md');
       await body.getByLabel(zh ? '当前基线' : 'Current baseline',{exact:true}).fill('V1');
       await body.getByRole('checkbox').check();
+      await body.screenshot({animations:'disabled',path:resolve(output,copy.locale+'-settings.png')});
       await body.getByRole('button',{name:init,exact:true}).last().click();
       await body.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/).waitFor();
 
@@ -101,25 +103,27 @@ try {
       await body.getByRole('button',{name:labels.advance,exact:true}).click();
       await body.getByRole('button',{name:labels.cancel,exact:true}).click();
       await body.getByRole('button',{name:labels.confirm,exact:true}).click();
-      await body.screenshot({path:resolve(output,copy.locale+'-light.png')});
+      await body.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-light.png')});
       for (const label of [labels.models,labels.tests,labels.graph]) await body.getByRole('tab',{name:label,exact:true}).click();
       await page.emulateMedia({colorScheme:'dark'});
-      await body.screenshot({path:resolve(output,copy.locale+'-dark.png')});
+      await body.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-dark.png')});
       const fullscreen=page.getByRole('button',{name:copy.fullscreen,exact:true});
       if (await fullscreen.isVisible()) await fullscreen.click();
       await page.setViewportSize({width:390,height:844});
       await body.getByRole('tab',{name:labels.models,exact:true}).click();
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-      await page.screenshot({path:resolve(output,copy.locale+'-mobile-dark.png')});
+      await page.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-mobile-dark.png')});
       await page.emulateMedia({colorScheme:'light'});
-      await page.screenshot({path:resolve(output,copy.locale+'-mobile-light.png')});
+      await page.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-mobile-light.png')});
+      await body.getByRole('tab',{name:zh ? '流程' : 'Flow',exact:true}).click();
+      await page.screenshot({animations:'disabled',path:resolve(output,copy.locale+'-mobile-flow.png')});
       assert.equal(await page.locator('style[data-plugin="dsh-plugin-sidebar-workbench"]').count(), 1)
       assert.equal(await page.locator('vite-error-overlay').count(), 0)
       assert.deepEqual(errors.filter(error => !error.startsWith('[deepseek-account] account read failed')), [])
       report.checks.push({ locale: copy.locale, result: 'passed', viewports: ['1440x1000', '390x844'],
         scenarios: ['native entry', 'real Host initialization', 'explicit demo', 'stage advance', 'cancel acknowledgment', 'four views', 'light/dark', '390px'], errors })
     } catch (error) {
-      await page.screenshot({ path: resolve(output, `${copy.locale}-failure.png`) })
+      await page.screenshot({ animations: 'disabled',  path: resolve(output, `${copy.locale}-failure.png`) })
       report.checks.push({ locale: copy.locale, result: 'failed', error: String(error), errors })
       throw error
     } finally { await context.close() }

@@ -1,7 +1,7 @@
 /** React-free projection. Async results remain keyed to their initiating Session and workspace. */
 import type { IWorkspaces, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { DemoExecutor, type Run, type Operation, type Scenario, type Inputs, type ProjectId, type RunId } from '../shared/workflow.ts'
-import { resultSchema, type ProjectCommand, type ProjectResult } from '../shared/project.ts'
+import { DemoExecutor, type Run, type Operation, type Scenario, type Inputs, type ProjectId, type RunId } from '../../shared/workflow.ts'
+import { resultSchema, type ProjectCommand, type ProjectResult } from '../../shared/project.ts'
 
 export interface DataSnapshot {
   readonly workspace?: WorkspaceView

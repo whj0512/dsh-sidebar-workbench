@@ -1,13 +1,14 @@
 /** Native page behavior with real view store and demo domain; no Host or model is impersonated. */
 import { useSyncExternalStore } from 'react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, act } from '@testing-library/react'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceSnapshot, IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { Workbench, type WorkbenchProps } from '../src/client/Workbench.tsx'
-import { WorkbenchData } from '../src/client/data.ts'
-import { createViewStore } from '../src/client/view-store.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { DraftGuard } from '../src/client/state/draft-guard.ts'
+import { WorkbenchData } from '../src/client/state/data.ts'
+import { createViewStore } from '../src/client/state/view-store.ts'
+import { en, zh } from '../src/client/i18n/locales.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
 afterEach(cleanup)
@@ -21,7 +22,7 @@ function fixture(dictionary = en) {
   const store = createViewStore().create()
   const source = data.source('s1')
   const props = {
-    t: translator(dictionary), useTabInfo: () => ({ tab: { id: 'tab1' } }),
+    draftChanged: () => {}, t: translator(dictionary), useTabInfo: () => ({ tab: { id: 'tab1' } }),
     useWorkbench: (selector: (s: ReturnType<typeof source.getSnapshot>) => unknown) => selector(useSyncExternalStore(source.subscribe, source.getSnapshot)),
     useStore: (selector: (s: ReturnType<typeof store.getSnapshot>) => unknown) => selector(useSyncExternalStore(store.subscribe, store.getSnapshot)),
     actions: store.actions, start: (op, scope, scenario) => { data.start('s1', op, scope, scenario) },
@@ -29,6 +30,30 @@ function fixture(dictionary = en) {
   } as WorkbenchProps
   return { data, props, workspace }
 }
+it('keeps model previews stable while editing drafts and refreshes translated panels without losing view state', () => {
+  const f = fixture()
+  const t = vi.fn(f.props.t)
+  const draftChanged = vi.fn()
+  const props = { ...f.props, t, draftChanged }
+  const body = render(<Workbench {...props} />)
+  try {
+    fireEvent.click(screen.getByRole('tab', { name: en.models }))
+    fireEvent.click(screen.getByRole('button', { name: 'Statechart' }))
+    const previewCalls = () => t.mock.calls.filter(([key]) => key === 'modelReadOnly').length
+    const before = previewCalls()
+    fireEvent.change(screen.getByLabelText(en.draft), { target: { value: 'First' } })
+    fireEvent.change(screen.getByLabelText(en.draft), { target: { value: 'Revised' } })
+    expect(previewCalls()).toBe(before)
+    expect(draftChanged.mock.calls.map(([, dirty]) => dirty)).toEqual([false, true])
+    body.rerender(<Workbench {...props} t={translator(zh)} />)
+    expect(screen.getByText(zh.modelReadOnly)).toBeTruthy()
+    expect(screen.queryByText(en.modelReadOnly)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Statechart' }).getAttribute('aria-pressed')).toBe('true')
+    expect((screen.getByLabelText(zh.draft) as HTMLTextAreaElement).value).toBe('Revised')
+    fireEvent.change(screen.getByLabelText(zh.draft), { target: { value: '' } })
+    expect(draftChanged.mock.calls.map(([, dirty]) => dirty)).toEqual([false, true, false])
+  } finally { f.data.dispose() }
+})
 it.each([en, zh])('shows production unavailability and all four keyboard-accessible tabs', dictionary => {
   const f = fixture(dictionary); render(<Workbench {...f.props} />)
   expect(screen.getByRole('status').textContent).toBe(dictionary.unavailable)
@@ -58,4 +83,33 @@ it('distinguishes pending workspace membership from unbound', () => {
   act(() => f.workspace.set({ ...f.workspace.getSnapshot(), phase: 'pending', state: 'loading' }))
   expect(screen.getAllByText(en.loading).length).toBeGreaterThan(0)
   expect(screen.queryByRole('button', { name: en.initialize })).toBeNull(); f.data.dispose()
+})
+
+it('announces run changes and keeps unload protection after the sidebar closes without changing draft data', () => {
+  const f = fixture()
+  const guard = new DraftGuard(window)
+  const props = { ...f.props, draftChanged: (key: string, dirty: boolean) => guard.update(key, dirty) }
+  const body = render(<Workbench {...props} />)
+  try {
+    fireEvent.click(screen.getByRole('button', { name: en.demo }))
+    fireEvent.click(screen.getByRole('button', { name: en.features }))
+    fireEvent.click(screen.getByRole('button', { name: en.model }))
+    const status = screen.getByLabelText(en.dimensions)
+    expect(status.getAttribute('aria-live')).toBe('polite')
+    const before = status.textContent
+    fireEvent.click(screen.getByRole('button', { name: en.advance }))
+    expect(status.textContent).not.toBe(before)
+    fireEvent.click(screen.getByRole('tab', { name: en.models }))
+    fireEvent.change(screen.getByLabelText(en.draft), { target: { value: 'Keep this draft' } })
+    body.unmount()
+    const leaving = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(leaving)
+    expect(leaving.defaultPrevented).toBe(true)
+    render(<Workbench {...props} />)
+    expect((screen.getByLabelText(en.draft) as HTMLTextAreaElement).value).toBe('Keep this draft')
+    fireEvent.change(screen.getByLabelText(en.draft), { target: { value: '' } })
+    const clean = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(clean)
+    expect(clean.defaultPrevented).toBe(false)
+  } finally { guard.dispose(); f.data.dispose() }
 })

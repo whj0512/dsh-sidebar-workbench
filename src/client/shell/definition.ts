@@ -2,7 +2,7 @@
 import { IconCodeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from './locales.ts'
+import type {} from '../i18n/locales.ts'
 
 export const WORKBENCH_ID = 'dsh-plugin-sidebar-workbench'
 export const WORKBENCH_KIND = 'sidebar-workbench'

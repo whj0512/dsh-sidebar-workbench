@@ -1,9 +1,10 @@
-/** Evaluate the shipped factory protocol with the same three shared-module requests. */
+/** Evaluate the shipped factory protocol with the declared host-shared modules. */
 import { readFile } from 'node:fs/promises'
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import * as zod from 'zod'
+import * as React from 'react'
 
 test('the client artifact registers a factory and requests only host-shared modules', async () => {
   const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
@@ -14,7 +15,7 @@ test('the client artifact registers a factory and requests only host-shared modu
   assert.equal(registration.id, 'dsh-plugin-sidebar-workbench')
   const exports = registration.factory(name => {
     requests.push(name)
-    if (name === 'react') return { useState() {} }
+    if (name === 'react') return React
     if (name === 'react/jsx-runtime') return { jsx() {}, jsxs() {}, Fragment: Symbol('fragment') }
     if (name === '@deepseek-ai/dsh-client-ui-primitives') return { Button() {}, IconCodeOutlineRegular() {} }
     if (name === '@deepseek-ai/dsh-client-store') return { defineStore() {} }

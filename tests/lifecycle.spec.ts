@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { expect, it } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import { WORKBENCH_ID, WORKBENCH_KIND } from '../src/client/definition.ts'
+import { WORKBENCH_ID, WORKBENCH_KIND } from '../src/client/shell/definition.ts'
 
 it('releases all contributions on unload and registers once on reactivation', async () => {
   const ctx = new Context()

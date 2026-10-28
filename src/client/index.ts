@@ -3,16 +3,17 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { WORKBENCH_ID, workbenchDefinition } from './definition.ts'
-import { en, zh } from './locales.ts'
+import { WORKBENCH_ID, workbenchDefinition } from './shell/definition.ts'
+import { en, zh } from './i18n/locales.ts'
 import { Workbench } from './Workbench.tsx'
-import { WorkbenchTitle } from './WorkbenchTitle.tsx'
+import { WorkbenchTitle } from './shell/WorkbenchTitle.tsx'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { WorkbenchData } from './data.ts'
-import { createViewStore } from './view-store.ts'
+import { WorkbenchData } from './state/data.ts'
+import { DraftGuard } from './state/draft-guard.ts'
+import { createViewStore } from './state/view-store.ts'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import { remoteContribution } from '../shared/remote.ts'
-import stylesheet from './Workbench.module.css?inline'
+import stylesheet from './styles/Workbench.module.css?inline'
 
 export const inject = ['slots', 'locale', 'sidebarRightTabs', 'workspaces', 'remote']
 
@@ -33,6 +34,8 @@ function install(ctx: Context): void {
     return result.value
   })
   const store = createViewStore()
+  const drafts = new DraftGuard(window)
+  ctx.effect(() => () => drafts.dispose(), 'workbench: draft unload guard')
   ctx.effect(() => () => data.dispose(), 'workbench: domain lifetime')
   const namespace = 'sidebarWorkbench'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'workbench: dictionaries')
@@ -47,7 +50,7 @@ function install(ctx: Context): void {
   ctx.effect(() => ctx.sidebarRightTabs.register(workbenchDefinition(t)), 'workbench: page')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab', key: WORKBENCH_ID, locale: namespace, store,
-      inject: (sessionId) => ({ hooks: { workbench: data.source(sessionId) },
+      inject: (sessionId) => ({ draftChanged: (key, dirty) => drafts.update(`${sessionId}:${key}`, dirty), hooks: { workbench: data.source(sessionId) },
         start: (operation, scope, scenario) => { data.start(sessionId, operation, scope, scenario) },
         act: (id, action) => data.act(id, action),
         project: (action, fields) => { void data.project(sessionId, action, fields) },

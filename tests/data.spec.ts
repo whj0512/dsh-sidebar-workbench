@@ -3,7 +3,7 @@
 import { expect, it } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { WorkbenchData, workspaceFor } from '../src/client/data.ts'
+import { WorkbenchData, workspaceFor } from '../src/client/state/data.ts'
 import type { ProjectResult } from '../src/shared/project.ts'
 function workspace(id: string, session: string): WorkspaceView {
   return { workspaceId: id as WorkspaceView['workspaceId'], path: `/project/${id}`, title: id,

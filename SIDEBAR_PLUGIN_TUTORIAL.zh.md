@@ -84,11 +84,11 @@ pnpm dsh --profile sidebar-workbench-dev --port 3081
 | [cordis.patch.yml](cordis.patch.yml) | 将包插入 profile 的插件树 | 插件行 `id` 和包名 |
 | [src/index.ts](src/index.ts) | Host 侧插件入口 | 纯 UI 插件可保持空 `apply()` |
 | [src/client/index.ts](src/client/index.ts) | 浏览器侧依赖和注册装配 | 字典、样式、tab 与 slot 注册 |
-| [definition.ts](src/client/definition.ts) | 页面类型和开始页入口 | 类型 `kind`、标题、入口顺序和图标 |
+| [definition.ts](src/client/shell/definition.ts) | 页面类型和开始页入口 | 类型 `kind`、标题、入口顺序和图标 |
 | [Workbench.tsx](src/client/Workbench.tsx) | 页面正文及临时计数 | 业务 UI、局部状态和操作 |
-| [WorkbenchTitle.tsx](src/client/WorkbenchTitle.tsx) | tab／浮窗标题 | 标题图标和本地化显示 |
-| [locales.ts](src/client/locales.ts) | 中英文文案及类型扩展 | 标题、提示、按钮和无障碍文案 |
-| [Workbench.module.css](src/client/Workbench.module.css) | 页面样式 | 布局和主题变量使用 |
+| [WorkbenchTitle.tsx](src/client/shell/WorkbenchTitle.tsx) | tab／浮窗标题 | 标题图标和本地化显示 |
+| [locales.ts](src/client/i18n/locales.ts) | 中英文文案及类型扩展 | 标题、提示、按钮和无障碍文案 |
+| [Workbench.module.css](src/client/styles/Workbench.module.css) | 页面样式 | 布局和主题变量使用 |
 | [tsdown.config.ts](tsdown.config.ts) | Host／Client 打包及 CSS Modules 编译 | 构建模块 ID、共享模块配置 |
 | `tsconfig.*.json` | Host、Client、测试检查的编译配置 | 新增文件、类型依赖 |
 | `tests/`、`scripts/browser-smoke.mjs` | 单元、产物和真实 Web 验证 | 新业务的行为断言与界面预期 |
