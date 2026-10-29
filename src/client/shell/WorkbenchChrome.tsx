@@ -12,20 +12,93 @@ export const WorkbenchChrome = memo(function WorkbenchChrome({ t, workspace, pha
   primary: Page; uid: string; go: (page: Page) => void; toggleDemo: () => void
 }) {
   const [menu, setMenu] = useState(false)
-  return <>    <div className={css.chrome}><header className={css.header}>
-      <div className={css.heading}><h1>{t('title')}</h1><p>{workspace?.title ?? t(phase === 'ready' ? 'unbound' : phase)}</p></div>
-      <Menu anchor={<Button className={css.secondaryButton} variant="outline" onClick={() => setMenu(!menu)} aria-expanded={menu}>{t('more')}</Button>} open={menu} onClose={() => setMenu(false)} portal items={(['settings', 'review', 'run', 'artifacts'] as const).map(id => ({ id, label: t(id) }))}
-        onSelect={id => { go(id as Page); setMenu(false) }} />
-    </header>
-    {workspace && <details className={css.workspace}><summary>{t('root')}</summary><p className={css.path}>{workspace.path}</p></details>}
-    <div className={css.mode}><Button className={css.secondaryButton} variant="outline" onClick={toggleDemo}>{t(demo ? 'production' : 'demo')}</Button>
-      {demo && <span>{t('version')}: {baseline}</span>}</div>
-    <p className={css.notice} role="status">{t(demo ? 'demoNotice' : 'unavailable')}</p>
-    </div><SegmentedTabs className={css.navigation} label={t('title')} value={primary} onChange={page => go(page as Page)} items={[
-      { value: 'flow', label: t('flow'), id: `${uid}-flow`, panelId: `${uid}-body` },
-      { value: 'models', label: t('models'), id: `${uid}-models`, panelId: `${uid}-body` },
-      { value: 'tests', label: t('tests'), id: `${uid}-tests`, panelId: `${uid}-body` },
-      { value: 'graph', label: t('graph'), id: `${uid}-graph`, panelId: `${uid}-body` },
-    ]} />
-</>
+  return (
+    <>
+      <div className={css.chrome}>
+        <header className={css.header}>
+          <div className={css.heading}>
+            <h1>{t('title')}</h1>
+            <p>{workspace?.title ?? t(phase === 'ready' ? 'unbound' : phase)}</p>
+          </div>
+          <Menu
+            anchor={
+              <Button
+                className={css.secondaryButton}
+                variant="outline"
+                onClick={() => setMenu(!menu)}
+                aria-expanded={menu}
+              >
+                {t('more')}
+              </Button>
+            }
+            open={menu}
+            onClose={() => setMenu(false)}
+            portal
+            items={(['settings', 'review', 'run', 'artifacts'] as const).map(
+              id => ({ id, label: t(id) }),
+            )}
+            onSelect={id => {
+              go(id as Page)
+              setMenu(false)
+            }}
+          />
+        </header>
+        {workspace && (
+          <details className={css.workspace}>
+            <summary>{t('root')}</summary>
+            <p className={css.path}>{workspace.path}</p>
+          </details>
+        )}
+        <div className={css.mode}>
+          <Button
+            className={css.secondaryButton}
+            variant="outline"
+            onClick={toggleDemo}
+          >
+            {t(demo ? 'production' : 'demo')}
+          </Button>
+          {demo && (
+            <span>{t('version')}: {baseline}</span>
+          )}
+        </div>
+        <p className={css.notice} role="status">
+          {t(demo ? 'demoNotice' : 'unavailable')}
+        </p>
+      </div>
+      <div className={css.navigationBar}>
+        <SegmentedTabs
+          className={css.navigation}
+          label={t('title')}
+          value={primary}
+          onChange={page => go(page as Page)}
+          items={[
+            {
+              value: 'flow',
+              label: t('flow'),
+              id: `${uid}-flow`,
+              panelId: `${uid}-body`,
+            },
+            {
+              value: 'models',
+              label: t('models'),
+              id: `${uid}-models`,
+              panelId: `${uid}-body`,
+            },
+            {
+              value: 'tests',
+              label: t('tests'),
+              id: `${uid}-tests`,
+              panelId: `${uid}-body`,
+            },
+            {
+              value: 'graph',
+              label: t('graph'),
+              id: `${uid}-graph`,
+              panelId: `${uid}-body`,
+            },
+          ]}
+        />
+      </div>
+    </>
+  )
 })

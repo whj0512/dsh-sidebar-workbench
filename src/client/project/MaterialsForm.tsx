@@ -53,13 +53,72 @@ export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, in
     setErrors(current => { const next = { ...current }; delete next[field]; return next })
     change(patch)
   }
-  const hint = (field: Field) => errors[field] && <span id={`${uid}-${field}-error`} className={css.fieldError}>{t(errors[field])}</span>
+  const hint = (field: Field) =>
+    errors[field] && (
+      <span
+        id={`${uid}-${field}-error`}
+        className={css.fieldError}
+      >
+        {t(errors[field])}
+      </span>
+    )
   const a11y = (field: Field) => ({ 'aria-invalid': !!errors[field], 'aria-describedby': errors[field] ? `${uid}-${field}-error` : undefined })
-  return <form noValidate onSubmit={submit} aria-busy={loading}>
-    <label>{t('original')}<Input ref={original} className={css.field} {...a11y('original')} value={fields.original} onChange={e => edit('original', { original: e.target.value })} />{hint('original')}</label>
-    <label>{t('markdown')}<Input ref={markdown} className={css.field} {...a11y('markdown')} value={fields.markdown} onChange={e => edit('markdown', { markdown: e.target.value })} />{hint('markdown')}</label>
-    <label>{t('version')}<Input ref={version} className={css.field} {...a11y('version')} value={fields.version} onChange={e => edit('version', { version: e.target.value })} />{hint('version')}</label>
-    <label className={css.row}><input ref={sameVersion} type="checkbox" {...a11y('sameVersion')} checked={fields.sameVersion} onChange={e => edit('sameVersion', { sameVersion: e.target.checked })} />{t('sameVersion')}{hint('sameVersion')}</label>
-    <Button type="submit" className={css.primaryButton} variant="primary" disabled={unavailable || loading}>{t(loading ? 'initializing' : 'initialize')}</Button>
-  </form>
+  return (
+    <form noValidate onSubmit={submit} aria-busy={loading}>
+      <label>
+        {t('original')}
+        <Input
+          ref={original}
+          className={css.field}
+          {...a11y('original')}
+          value={fields.original}
+          onChange={e => edit('original', { original: e.target.value })}
+        />
+        {hint('original')}
+      </label>
+      <label>
+        {t('markdown')}
+        <Input
+          ref={markdown}
+          className={css.field}
+          {...a11y('markdown')}
+          value={fields.markdown}
+          onChange={e => edit('markdown', { markdown: e.target.value })}
+        />
+        {hint('markdown')}
+      </label>
+      <label>
+        {t('version')}
+        <Input
+          ref={version}
+          className={css.field}
+          {...a11y('version')}
+          value={fields.version}
+          onChange={e => edit('version', { version: e.target.value })}
+        />
+        {hint('version')}
+      </label>
+      <label className={css.row}>
+        <input
+          ref={sameVersion}
+          type="checkbox"
+          {...a11y('sameVersion')}
+          checked={fields.sameVersion}
+          onChange={e =>
+            edit('sameVersion', { sameVersion: e.target.checked })
+          }
+        />
+        {t('sameVersion')}
+        {hint('sameVersion')}
+      </label>
+      <Button
+        type="submit"
+        className={css.primaryButton}
+        variant="primary"
+        disabled={unavailable || loading}
+      >
+        {t(loading ? 'initializing' : 'initialize')}
+      </Button>
+    </form>
+  )
 })

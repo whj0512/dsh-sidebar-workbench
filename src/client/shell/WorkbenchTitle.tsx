@@ -9,5 +9,10 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
  * @returns The tab label and decorative icon.
  */
 export function WorkbenchTitle({ t }: PropsLocale<'sidebarWorkbench'>): ReactNode {
-  return <><IconCodeOutlineRegular size={16} />{t('title')}</>
+  return (
+    <>
+      <IconCodeOutlineRegular size={16} />
+      {t('title')}
+    </>
+  )
 }

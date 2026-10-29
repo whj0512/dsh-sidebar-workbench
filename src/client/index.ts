@@ -33,12 +33,12 @@ function install(ctx: Context): void {
     if (!result.ok) throw new Error(result.error.code)
     return result.value
   })
-  const store = createViewStore()
-  const drafts = new DraftGuard(window)
+  const store = createViewStore() // Create a view store for managing the workbench UI state
+  const drafts = new DraftGuard(window) // Create a draft guard to manage unsaved changes in the workbench
   ctx.effect(() => () => drafts.dispose(), 'workbench: draft unload guard')
   ctx.effect(() => () => data.dispose(), 'workbench: domain lifetime')
   const namespace = 'sidebarWorkbench'
-  ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'workbench: dictionaries')
+  ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'workbench: dictionaries') // Register locale dictionaries for the workbench namespace
   const t = ctx.locale.bind(namespace)
   ctx.effect(() => {
     const style = document.createElement('style')
@@ -46,8 +46,8 @@ function install(ctx: Context): void {
     style.textContent = stylesheet
     document.head.append(style)
     return () => style.remove()
-  }, 'workbench: stylesheet')
-  ctx.effect(() => ctx.sidebarRightTabs.register(workbenchDefinition(t)), 'workbench: page')
+  }, 'workbench: stylesheet') // Register the stylesheet for the workbench
+  ctx.effect(() => ctx.sidebarRightTabs.register(workbenchDefinition(t)), 'workbench: page') // Register the workbench page in the right sidebar
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab', key: WORKBENCH_ID, locale: namespace, store,
       inject: (sessionId) => ({ draftChanged: (key, dirty) => drafts.update(`${sessionId}:${key}`, dirty), hooks: { workbench: data.source(sessionId) },

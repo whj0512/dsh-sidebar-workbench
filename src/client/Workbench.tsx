@@ -37,43 +37,288 @@ export function Workbench({ t, useTabInfo, useWorkbench, useStore, actions, star
     start(operation, view.selected, view.scenario)
     go(operation === 'upload' || operation === 'infer' ? 'confirm' : 'run')
   }, [view.demo, view.selected, view.scenario, start, go])
-  const command = (op: Operation) => <Button className={css.secondaryButton} variant="outline" key={op} disabled={!view.demo || !view.selected.length} onClick={() => launch(op)}>{t(op)}</Button>
+  const command = (op: Operation) => (
+    <Button
+      className={css.secondaryButton}
+      variant="outline"
+      key={op}
+      disabled={!view.demo || !view.selected.length}
+      onClick={() => launch(op)}
+    >
+      {t(op)}
+    </Button>
+  )
   const candidate = useMemo(() => view.page === 'review' ? latestRun(data.runs, r => r.request.operation === 'itemize' || r.request.operation === 'update') : undefined, [view.page, data.runs])
   const activeRuns = view.demo ? data.runs : EMPTY_RUNS
-  return <section className={css.root} aria-label={t('title')}>
-    {view.draft.length > 0 && <p className={css.draftNotice}>{t('unsavedDraft')}</p>}
-    <WorkbenchChrome t={t} workspace={data.workspace} phase={data.phase} baseline={data.baseline} demo={view.demo} primary={primary} uid={uid} go={go} toggleDemo={toggleDemo} />
-    <div className={css.body} role="tabpanel" id={`${uid}-body`} aria-labelledby={`${uid}-${primary}`} data-page={view.page}>
-      {!['flow', 'models', 'tests', 'graph'].includes(view.page) && <Button className={css.secondaryButton} variant="outline" onClick={() => go('flow')}>{t('back')}</Button>}
-      {!view.demo && <ProjectPanel t={t} phase={data.phase} loading={data.projectLoading} result={data.projectResult} project={project} go={go} />}
-      {view.page === 'flow' && <WorkflowOverview t={t} go={go} />}
-      {view.page === 'settings' && <><h2>{t('settings')}</h2><p>{t('materialHelp')}</p>
-        <MaterialsForm key={bucket} t={t} fields={materialFields} change={change} unavailable={view.demo || data.phase !== 'ready'} loading={data.projectLoading} problem={data.projectResult?.problem}
-          initialize={initialize} />
-        <label>{t('draft')}<textarea value={view.draft} onChange={e => change({ draft: e.target.value })} /></label></>}
-      {view.page === 'review' && <><h2>{t('review')}</h2><div className={css.actions}>{command('itemize')}{command('update')}</div>
-        {view.demo && <><h3>{t('overview')}</h3><p>{t('sampleOverview')}</p><h3>{t('source')}</h3><p>{t('sampleSource')}</p>
-          <h3>{t('seed')}</h3><p>{t('sampleRelation')}</p><details><summary>{t('differences')}</summary><p>{t('differenceDetail')}</p><p>{t('history')}</p></details>
-          <p>{t(data.adopted ? 'accepted' : 'baselinePending')}</p><p>{t('reviewPending')}</p>
-          <Button className={css.primaryButton} variant="primary" disabled={!candidate || candidate.state !== 'succeeded' || candidate.validation !== 'passed' || candidate.review === 'accepted'} onClick={() => candidate && act(candidate.id, 'accept')}>{t('accept')}</Button>
-          <label>{t('draft')}<textarea value={view.draft} onChange={e => change({ draft: e.target.value })} /></label></>}
-      </>}
-      {view.page === 'features' && <><h2>{t('features')}</h2><label>{t('search')}<Input className={css.field} value={view.search} onChange={e => change({ search: e.target.value })} /></label>
-        {view.demo && ['OnePedal', 'BrakeHold'].filter(f => f.toLowerCase().includes(view.search.toLowerCase())).map(f => <label className={css.row} key={f}>
-          <input type="checkbox" checked={view.selected.includes(f)} onChange={e => change({ selected: e.target.checked ? [...view.selected, f] : view.selected.filter(x => x !== f) })} />{f}<span>§3.2.1 · {data.baseline}</span></label>)}
-        <p>{t('partial')}</p><div className={css.actions}>{command('model')}{command('relations')}{command('align')}{command('tests')}</div>
-      </>}
-      {view.page === 'models' && <><ModelsPanel t={t} selectedModel={view.model} demo={view.demo} canRun={view.demo && view.selected.length > 0} selectModel={selectModel} launch={launch} /><label>{t('draft')}<textarea value={view.draft} onChange={e => change({ draft: e.target.value })} /></label></>}
-      {view.page === 'tests' && <><h2>{t('tests')}</h2><p>{t('coverageUnknown')}</p>{view.demo && <p>{t('coverage')}</p>}{command('tests')}<Button className={css.secondaryButton} variant="outline" onClick={() => go('models')}>{t('issues')}</Button></>}
-      {view.page === 'graph' && <><h2>{t('graph')}</h2><p>{t('graphSource')}</p><div className={css.actions}>{command('ttl')}{command('upload')}{command('infer')}{command('query')}</div>
-        {view.demo && <><p>{t('sampleRelation')}</p><details><summary>{t('source')}</summary><p>{t('graphEvidence')}</p><p>{t('confidence')}</p><p>{t('graphInferred')}</p></details></>}
-      </>}
-      {view.page === 'confirm' && <RemoteConfirmation runs={activeRuns} t={t} act={act} go={go} />}
-      {view.page === 'run' && <RunHistory runs={activeRuns} t={t} act={act} go={go} />}
-      {view.page === 'artifacts' && <ArtifactList runs={activeRuns} t={t} />}
-      {view.demo && <label>{t('scenario')}<select value={view.scenario} onChange={e => change({ scenario: e.target.value as Scenario })}>
-        {(['success', 'alignment', 'missing', 'unknown', 'submitted', 'empty', 'failure'] as const).map(s => <option key={s} value={s}>{t(s)}</option>)}</select></label>}
-    </div>
-    {!!activeRuns.length && <footer className={css.footer}><Button className={css.secondaryButton} variant="outline" onClick={() => go('run')}>{t('runSummary', { count: activeRuns.length })}</Button><Button className={css.secondaryButton} variant="outline" onClick={() => go('artifacts')}>{t('artifacts')}</Button></footer>}
-  </section>
+  return (
+    <section className={css.root} aria-label={t('title')}>
+      {view.draft.length > 0 && (
+        <p className={css.draftNotice}>{t('unsavedDraft')}</p>
+      )}
+      <WorkbenchChrome
+        t={t}
+        workspace={data.workspace}
+        phase={data.phase}
+        baseline={data.baseline}
+        demo={view.demo}
+        primary={primary}
+        uid={uid}
+        go={go}
+        toggleDemo={toggleDemo}
+      />
+      <div
+        className={css.body}
+        role="tabpanel"
+        id={`${uid}-body`}
+        aria-labelledby={`${uid}-${primary}`}
+        data-page={view.page}
+      >
+        {/* 非主 tab -> 返回流程按钮 */}
+        {!['flow', 'models', 'tests', 'graph'].includes(view.page) && (
+          <Button
+            className={`${css.secondaryButton} ${css.backButton}`}
+            variant="outline"
+            onClick={() => go('flow')}
+          >
+            {t('back')}
+          </Button>
+        )}
+        {!view.demo && (
+          <ProjectPanel
+            t={t}
+            phase={data.phase}
+            loading={data.projectLoading}
+            result={data.projectResult}
+            project={project}
+            go={go}
+          />
+        )}
+        {view.page === 'flow' && (
+          <WorkflowOverview t={t} go={go} />
+        )}
+        {view.page === 'settings' && (
+          <>
+            <h2>{t('settings')}</h2>
+            <p>{t('materialHelp')}</p>
+            <MaterialsForm
+              key={bucket}
+              t={t}
+              fields={materialFields}
+              change={change}
+              unavailable={view.demo || data.phase !== 'ready'}
+              loading={data.projectLoading}
+              problem={data.projectResult?.problem}
+              initialize={initialize}
+            />
+            <label>
+              {t('draft')}
+              <textarea
+                value={view.draft}
+                onChange={e => change({ draft: e.target.value })}
+              />
+            </label>
+          </>
+        )}
+        {view.page === 'review' && (
+          <>
+            <h2>{t('review')}</h2>
+            <div className={css.actions}>
+              {command('itemize')}
+              {command('update')}
+            </div>
+            {view.demo && (
+              <>
+                <h3>{t('overview')}</h3>
+                <p>{t('sampleOverview')}</p>
+                <h3>{t('source')}</h3>
+                <p>{t('sampleSource')}</p>
+                <h3>{t('seed')}</h3>
+                <p>{t('sampleRelation')}</p>
+                <details>
+                  <summary>{t('differences')}</summary>
+                  <p>{t('differenceDetail')}</p>
+                  <p>{t('history')}</p>
+                </details>
+                <p>{t(data.adopted ? 'accepted' : 'baselinePending')}</p>
+                <p>{t('reviewPending')}</p>
+                <Button
+                  className={css.primaryButton}
+                  variant="primary"
+                  disabled={
+                    !candidate ||
+                    candidate.state !== 'succeeded' ||
+                    candidate.validation !== 'passed' ||
+                    candidate.review === 'accepted'
+                  }
+                  onClick={() => candidate && act(candidate.id, 'accept')}
+                >
+                  {t('accept')}
+                </Button>
+                <label>
+                  {t('draft')}
+                  <textarea
+                    value={view.draft}
+                    onChange={e => change({ draft: e.target.value })}
+                  />
+                </label>
+              </>
+            )}
+          </>
+        )}
+        {view.page === 'features' && (
+          <>
+            <h2>{t('features')}</h2>
+            <label>
+              {t('search')}
+              <Input
+                className={css.field}
+                value={view.search}
+                onChange={e => change({ search: e.target.value })}
+              />
+            </label>
+            {view.demo &&
+              ['OnePedal', 'BrakeHold']
+                .filter(f => f.toLowerCase().includes(view.search.toLowerCase()))
+                .map(f => (
+                  <label className={css.row} key={f}>
+                    <input
+                      type="checkbox"
+                      checked={view.selected.includes(f)}
+                      onChange={e =>
+                        change({
+                          selected: e.target.checked
+                            ? [...view.selected, f]
+                            : view.selected.filter(x => x !== f),
+                        })
+                      }
+                    />
+                    {f}
+                    <span>§3.2.1 · {data.baseline}</span>
+                  </label>
+                ))}
+            <p>{t('partial')}</p>
+            <div className={css.actions}>
+              {command('model')}
+              {command('relations')}
+              {command('align')}
+              {command('tests')}
+            </div>
+          </>
+        )}
+        {view.page === 'models' && (
+          <>
+            <ModelsPanel
+              t={t}
+              selectedModel={view.model}
+              demo={view.demo}
+              canRun={view.demo && view.selected.length > 0}
+              selectModel={selectModel}
+              launch={launch}
+            />
+            <label>
+              {t('draft')}
+              <textarea
+                value={view.draft}
+                onChange={e => change({ draft: e.target.value })}
+              />
+            </label>
+          </>
+        )}
+        {view.page === 'tests' && (
+          <>
+            <h2>{t('tests')}</h2>
+            <p>{t('coverageUnknown')}</p>
+            {view.demo && (
+              <p>{t('coverage')}</p>
+            )}
+            {command('tests')}
+            <Button
+              className={css.secondaryButton}
+              variant="outline"
+              onClick={() => go('models')}
+            >
+              {t('issues')}
+            </Button>
+          </>
+        )}
+        {view.page === 'graph' && (
+          <>
+            <h2>{t('graph')}</h2>
+            <p>{t('graphSource')}</p>
+            <div className={css.actions}>
+              {command('ttl')}
+              {command('upload')}
+              {command('infer')}
+              {command('query')}
+            </div>
+            {view.demo && (
+              <>
+                <p>{t('sampleRelation')}</p>
+                <details>
+                  <summary>{t('source')}</summary>
+                  <p>{t('graphEvidence')}</p>
+                  <p>{t('confidence')}</p>
+                  <p>{t('graphInferred')}</p>
+                </details>
+              </>
+            )}
+          </>
+        )}
+        {view.page === 'confirm' && (
+          <RemoteConfirmation runs={activeRuns} t={t} act={act} go={go} />
+        )}
+        {view.page === 'run' && (
+          <RunHistory runs={activeRuns} t={t} act={act} go={go} />
+        )}
+        {view.page === 'artifacts' && (
+          <ArtifactList runs={activeRuns} t={t} />
+        )}
+        {view.demo && (
+          <label>
+            {t('scenario')}
+            <select
+              value={view.scenario}
+              onChange={e =>
+                change({ scenario: e.target.value as Scenario })
+              }
+            >
+              {(
+                [
+                  'success',
+                  'alignment',
+                  'missing',
+                  'unknown',
+                  'submitted',
+                  'empty',
+                  'failure',
+                ] as const
+              ).map(s => (
+                <option key={s} value={s}>
+                  {t(s)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {!!activeRuns.length && (
+        <footer className={css.footer}>
+          <Button
+            className={css.secondaryButton}
+            variant="outline"
+            onClick={() => go('run')}
+          >
+            {t('runSummary', { count: activeRuns.length })}
+          </Button>
+          <Button
+            className={css.secondaryButton}
+            variant="outline"
+            onClick={() => go('artifacts')}
+          >
+            {t('artifacts')}
+          </Button>
+        </footer>
+      )}
+    </section>
+  )
 }

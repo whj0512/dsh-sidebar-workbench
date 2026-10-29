@@ -1,5 +1,7 @@
 # 右侧栏工作台插件
 
+接续开发请先阅读 [Agent 交接文档](docs/Agent交接文档.md)，其中记录当前实现范围、阶段验收状态、代码入口和验证限制。
+
 独立的 DeepSeek Harness Web 插件。在右侧栏“开始”页增加“我的工作台”入口，点击后显示原生 React 页面，提供点击计数和重置按钮。
 
 兼容目标：DSH **0.2.1-rc.3**、Node **24.9.0 或更新版本**、pnpm **11.28.5**。当前开发依赖链接同级 `deepseek-harness` checkout；安装预构建 tarball 不需要插件源码、开发依赖或相邻 checkout。
