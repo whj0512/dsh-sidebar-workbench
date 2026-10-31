@@ -62,7 +62,7 @@ export class ProjectService {
     try { return manifestSchema.parse(JSON.parse(await readFile(await confined(root, '.workbench/project.json'), 'utf8'))) }
     catch (error) { if (absent(error)) return undefined; if (error instanceof ProjectError) throw error; throw new ProjectError('identity') }
   }
-  private async publish(root: string, manifest: ProjectManifest): Promise<void> {
+  private async publish(root: string, manifest: ProjectManifest, replacing = false): Promise<void> {
     const directory = await confined(root, '.workbench', true)
     await mkdir(directory, { recursive: false }).catch((error: unknown) => { if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error })
     await confined(root, '.workbench')
@@ -70,8 +70,10 @@ export class ProjectService {
     const temp = join(directory, `${randomUUID()}.tmp`)
     const handle = await open(temp, 'wx')
     try { await handle.writeFile(`${JSON.stringify(manifest, null, 2)}\n`); await handle.sync() } finally { await handle.close() }
-    // An existing identity is never replaced by initialization; orphan temp files are harmless and not adopted.
-    if (await this.manifest(root)) throw new ProjectError('identity')
+    // Initialization cannot replace an identity; adoption updates only the same project.
+    const existing = await this.manifest(root)
+    if (existing && (!replacing || existing.projectId !== manifest.projectId)) throw new ProjectError('identity')
+    if (replacing && !existing) throw new ProjectError('identity')
     await rename(temp, destination)
   }
   private async discover(root: string): Promise<NonNullable<ProjectResult['discovered']>> {
@@ -90,6 +92,19 @@ export class ProjectService {
   }
   private async perform(command: ProjectCommand): Promise<ProjectResult> {
     const ws = await this.workspace(command)
+    if (command.action === 'files') {
+      const query = (command.query ?? '').replaceAll('\\', '/')
+      if (query.startsWith('/') || query.includes(':') || query.split('/').some(p => p === '..' || p === '.')) throw new ProjectError('escape')
+      const slash = query.lastIndexOf('/')
+      const parent = slash < 0 ? '' : query.slice(0, slash)
+      const prefix = query.slice(slash + 1).toLocaleLowerCase()
+      const directory = parent ? await confined(ws.path, parent) : await realpath(ws.path)
+      if (!parent && resolve(directory) !== resolve(ws.path)) throw new ProjectError('directory')
+      const entries = await readdir(directory, { withFileTypes: true })
+      return { ok: true, files: entries.filter(e => !e.isSymbolicLink() && (e.isFile() || e.isDirectory()) && e.name.toLocaleLowerCase().startsWith(prefix))
+        .map(e => ({ path: parent ? `${parent}/${e.name}` : e.name, directory: e.isDirectory() }))
+        .sort((a, b) => Number(b.directory) - Number(a.directory) || a.path.localeCompare(b.path)) }
+    }
     for (const b of this.bindings.list()) if (b.status === 'active' && !this.workspaces().some(w => w.id === b.workspaceId))
       await this.bindings.put({ ...b, status: 'removed' })
     let project = await this.manifest(ws.path)
@@ -105,6 +120,13 @@ export class ProjectService {
     if (command.action === 'relink') {
       if (!project || command.expectedProjectId !== project.projectId) throw new ProjectError('identity')
       if (others.some(b => b.unsettledRuns.length) || binding?.unsettledRuns.length || this.unsettled(project.projectId)) throw new ProjectError('unsettled')
+    }
+    if (project && command.action === 'adopt') {
+      const discovered = await this.discover(ws.path)
+      const artifacts = discovered.filter(a => a.status === 'recognized').map(a => a.path)
+      if (!artifacts.length) throw new ProjectError('materials')
+      project = { ...project, artifacts: [...new Set([...project.artifacts, ...artifacts])] }
+      await this.publish(ws.path, project, true)
     }
     if (!project) {
       if (command.action === 'relink') throw new ProjectError('identity')

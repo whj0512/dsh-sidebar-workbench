@@ -4,6 +4,8 @@ import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ProjectProblem } from '../../shared/project.ts'
 import type { View } from '../state/view-store.ts'
+import { MaterialPathInput } from './MaterialPathInput.tsx'
+import type { WorkbenchInjected } from '../workbench-types.ts'
 import css from '../styles/Workbench.module.css'
 
 type Fields = Pick<View, 'original' | 'markdown' | 'version' | 'sameVersion'>
@@ -12,7 +14,8 @@ type ErrorKey = 'originalRequired' | 'markdownRequired' | 'versionRequired' | 's
 const relativePath = (path: string): boolean => !/^(?:[\\/]|[a-z]:)/i.test(path) && !path.split(/[\\/]/).some(p => !p || p === '.' || p === '..')
 
 /** @param props - Existing view fields and commands; validation does not rewrite their values. @returns Accessible initialization form. */
-export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, initialize, unavailable, loading, problem }: {
+export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, initialize, unavailable, loading, problem, listFiles }: {
+  listFiles?: WorkbenchInjected['listFiles']
   t: TranslateNS<'sidebarWorkbench'>; fields: Fields; change: (patch: Partial<Fields>) => void
   initialize: () => void; unavailable: boolean; loading: boolean; problem: ProjectProblem | undefined
 }) {
@@ -67,23 +70,39 @@ export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, in
     <form noValidate onSubmit={submit} aria-busy={loading}>
       <label>
         {t('original')}
-        <Input
+        <MaterialPathInput
+          listFiles={listFiles}
+          extension={/\.(pdf|docx)$/i}
+          emptyLabel={t('fileEmpty')}
+          failedLabel={t('fileLookupFailed')}
+          versionLabel={t('fileLookupVersion')}
+          loadingLabel={t('loading')}
+          placeholder={t('fileMentionHint')}
+          disabled={unavailable || loading}
           ref={original}
           className={css.field}
           {...a11y('original')}
           value={fields.original}
-          onChange={e => edit('original', { original: e.target.value })}
+          onChange={value => edit('original', { original: value })}
         />
         {hint('original')}
       </label>
       <label>
         {t('markdown')}
-        <Input
+        <MaterialPathInput
+          listFiles={listFiles}
+          extension={/\.md$/i}
+          emptyLabel={t('fileEmpty')}
+          failedLabel={t('fileLookupFailed')}
+          versionLabel={t('fileLookupVersion')}
+          loadingLabel={t('loading')}
+          placeholder={t('fileMentionHint')}
+          disabled={unavailable || loading}
           ref={markdown}
           className={css.field}
           {...a11y('markdown')}
           value={fields.markdown}
-          onChange={e => edit('markdown', { markdown: e.target.value })}
+          onChange={value => edit('markdown', { markdown: value })}
         />
         {hint('markdown')}
       </label>

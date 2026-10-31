@@ -17,14 +17,12 @@ import { RunHistory, ArtifactList, RemoteConfirmation } from './runs/RunViews.ts
 const EMPTY_RUNS: readonly Run[] = []
 
 /** @param props - Framework-bound hooks, view state and commands. @returns Workspace-following workbench. */
-export function Workbench({ t, useTabInfo, useWorkbench, useStore, actions, start, act, project, draftChanged }: WorkbenchProps): ReactNode {
-  const data = useWorkbench(s => s)
-  const { tab } = useTabInfo()
-  const bucket = `${tab.id}:${data.workspace?.workspaceId ?? 'unbound'}`
+export function Workbench({ t, sessionId, tab, data, useStore, actions, start, act, project, draftChanged, listFiles }: WorkbenchProps): ReactNode {
+  const bucket = `${sessionId}:${tab.id}:${data.workspace?.workspaceId ?? 'unbound'}`
   const view = useStore(s => s.views[bucket] ?? initialView)
   const change = useCallback((patch: Partial<View>) => actions.change(bucket, patch), [actions, bucket])
   const hasDraft = view.draft.length > 0
-  useEffect(() => { draftChanged(bucket, hasDraft) }, [draftChanged, bucket, hasDraft])
+  useEffect(() => { draftChanged(bucket, hasDraft, tab.signal) }, [draftChanged, bucket, hasDraft, tab.signal])
   const go = useCallback((page: Page) => change({ page }), [change])
   const selectModel = useCallback((model: string) => change({ model }), [change])
   const toggleDemo = useCallback(() => change({ demo: !view.demo, page: 'flow' }), [change, view.demo])
@@ -103,6 +101,7 @@ export function Workbench({ t, useTabInfo, useWorkbench, useStore, actions, star
             <MaterialsForm
               key={bucket}
               t={t}
+              listFiles={listFiles}
               fields={materialFields}
               change={change}
               unavailable={view.demo || data.phase !== 'ready'}

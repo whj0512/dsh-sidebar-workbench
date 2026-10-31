@@ -1,6 +1,10 @@
 # 右侧栏工作台插件
 
-接续开发请先阅读 [Agent 交接文档](docs/Agent交接文档.md)，其中记录当前实现范围、阶段验收状态、代码入口和验证限制。
+接续开发请先阅读 [分阶段实施计划](docs/剩余任务分阶段实施计划.md)，按页面完成真实业务接入；代码线索和历史限制见 [Agent 交接文档](docs/Agent交接文档.md)。
+
+每阶段须同时交付可操作页面、真实执行与可核验产物，并经人工审核通过后才能继续；demo 或测试适配器不能替代真实业务验收。
+
+阶段 1–2 已获人工审核通过；阶段 2 的修复与证据见 [T01 验收报告](docs/阶段验收/阶段02-T01.md)。新阶段 3 从 P00 项目与材料准备开始，目前尚未启动。
 
 独立的 DeepSeek Harness Web 插件。在右侧栏“开始”页增加“我的工作台”入口，点击后显示原生 React 页面，提供点击计数和重置按钮。
 
@@ -77,23 +81,28 @@ pnpm dsh plugin --profile sidebar-workbench-dev add E:/dsh-sidebar-workbench
 
 ### 浏览器冒烟
 
-自动化启动使用项目指定的目录选择器 overlay：
+自动化只使用独立 home/profile；会创建工作区和 Session、登记夹具材料并改变测试语言。不要指向日常使用的 profile。隔离初始化和本阶段现有环境见 [T01 验收报告](docs/阶段验收/阶段02-T01.md)。启动时使用项目指定的目录选择器 overlay：
 
 ```powershell
 Set-Location E:\deepseek-harness
-pnpm dsh --profile sidebar-workbench-dev --patch apps/web/tests/pin-browse-picker.overlay.yml --port 3081 --no-open
+$env:DSH_HOME = '<独立测试 home 的绝对路径>'
+pnpm dsh --profile sidebar-workbench-acceptance --patch apps/web/tests/pin-browse-picker.overlay.yml --port 3097 --no-open
 ```
 
-在另一终端运行下列命令。`DSH_TEST_URL` 使用该次启动日志中的完整 URL；测试不调用模型。首次使用的 profile 需要先在 UI 选择工作区并进入一个空会话。
+在另一终端运行下列命令。`DSH_TEST_URL` 使用该次启动日志中的完整 URL；测试不调用模型。两个脚本顺序执行，输出分别放在新的独立目录，避免覆盖证据或并行改变语言。
 
 ```powershell
 Set-Location E:\dsh-sidebar-workbench
 $env:DSH_TEST_URL = '<启动日志中的本地 URL>'
+$env:DSH_TEST_OUTPUT_DIR = '<本次冒烟证据的独立目录>'
 pnpm run test:browser
+$env:DSH_TEST_OUTPUT_DIR = '<本次生命周期证据的独立目录>'
+pnpm run test:browser:lifecycle
 Remove-Item Env:DSH_TEST_URL
+Remove-Item Env:DSH_TEST_OUTPUT_DIR
 ```
 
-脚本优先使用本机已安装的 Edge 或 Chrome。非标准安装位置可通过 `DSH_BROWSER_PATH` 指定可执行文件。测试 profile 需要已有名为 `dsh-sidebar-workbench` 的工作区及默认工作区；脚本会创建空会话并切换它们，不发送消息。截图和结果位于忽略的 `artifacts/`，不进入 tarball。
+脚本优先使用本机已安装的 Edge 或 Chrome。非标准安装位置可通过 `DSH_BROWSER_PATH` 指定可执行文件。脚本自行创建独立夹具工作区并导航空会话，不发送消息。`DSH_TEST_OUTPUT_DIR` 缺省为当前工作目录的 `artifacts/`；审核时使用独立目录保留结果。截图和 JSON 不进入 tarball。
 
 ## 页面行为与扩展
 

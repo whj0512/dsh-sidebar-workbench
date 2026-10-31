@@ -1,4 +1,4 @@
-/** Only navigation, selections and drafts belong to this Session-scoped Slot store. */
+/** Plugin-lifetime navigation, selections and drafts keyed by Session, tab and workspace. */
 import { defineStore } from '@deepseek-ai/dsh-client-store'
 
 export type Page = 'flow' | 'review' | 'features' | 'run' | 'models' | 'tests' | 'graph' | 'confirm' | 'settings' | 'artifacts'
@@ -19,7 +19,7 @@ export interface View {
 }
 export const initialView: View = { page: 'flow', demo: false, feature: 'OnePedal', selected: ['OnePedal'], draft: '', search: '', scenario: 'success', operation: 'upload', model: 'Environment', original: '', markdown: '', version: '', sameVersion: false }
 
-/** @returns Session-scoped state with a separate bucket for each tab/workspace pair. */
+/** @returns Root-scoped state with a separate bucket for each Session/tab/workspace tuple. */
 export function createViewStore() {
   return defineStore({
     init: (): { views: Record<string, View> } => ({ views: {} }),

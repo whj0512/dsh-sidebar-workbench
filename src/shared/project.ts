@@ -9,7 +9,8 @@ export const bindingSchema = z.object({ workspaceId: z.string(), projectId: z.st
   status: z.enum(['active', 'removed']), unsettledRuns: z.array(z.string()) }).strict()
 export type ProjectBinding = z.infer<typeof bindingSchema>
 export const commandSchema = z.object({
-  action: z.enum(['inspect', 'initialize', 'discover', 'adopt', 'relink']),
+  action: z.enum(['inspect', 'initialize', 'discover', 'adopt', 'relink', 'files']),
+  query: z.string().optional(),
   sessionId: z.string().min(1), workspaceId: z.string().min(1),
   materials: materialSchema.optional(), expectedProjectId: z.string().uuid().optional(),
 }).strict()
@@ -18,6 +19,7 @@ export const problemSchema = z.enum(['unbound', 'directory', 'permission', 'esca
 export type ProjectProblem = z.infer<typeof problemSchema>
 export const resultSchema = z.object({
   ok: z.boolean(), problem: problemSchema.optional(), project: manifestSchema.optional(), binding: bindingSchema.optional(),
+  files: z.array(z.object({ path: z.string(), directory: z.boolean() }).strict()).optional(),
   discovered: z.array(z.object({ path: z.string(), status: z.enum(['recognized', 'missing', 'unsupported']), validation: z.literal('not-checked') })).optional(),
 }).strict()
 export type ProjectResult = z.infer<typeof resultSchema>

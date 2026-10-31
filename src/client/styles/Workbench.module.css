@@ -72,3 +72,7 @@
 .root .field:has([aria-invalid="true"]) { border-color: var(--dsw-alias-state-error-primary); }
 .draftNotice { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-secondary); background: var(--workbench-tint); font-size: 12px; }
 .root .row .fieldError { margin-left: 0; color: var(--dsw-alias-state-error-primary); }
+.pathPicker {
+  display: block;
+  width: 100%;
+}

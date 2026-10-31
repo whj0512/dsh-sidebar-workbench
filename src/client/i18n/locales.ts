@@ -1,6 +1,10 @@
 /** Typed product copy. Artifact identifiers remain verbatim. */
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 export const zh = {
+  fileEmpty: '没有匹配的文件或目录',
+  fileLookupFailed: '无法读取工作区文件，请检查目录后重新输入 @',
+  fileLookupVersion: '宿主未加载文件查询功能，请重启 DSH 并刷新页面',
+  fileMentionHint: '输入 @ 选择工作区文件',
   originalRequired: '请填写工作区内的 PDF 或 DOCX 相对路径',
   markdownRequired: '请填写工作区内的 Markdown 相对路径（.md）',
   versionRequired: '请填写材料版本',
@@ -155,6 +159,10 @@ export const zh = {
   "problem_invalid": "请求格式不受支持"
 }
 export const en = {
+  fileEmpty: 'No matching files or folders',
+  fileLookupFailed: 'Cannot read workspace files. Check the directory and type @ again.',
+  fileLookupVersion: 'The Host has not loaded file lookup. Restart DSH and refresh this page.',
+  fileMentionHint: 'Type @ to select a workspace file',
   originalRequired: 'Enter a workspace-relative PDF or DOCX path',
   markdownRequired: 'Enter a workspace-relative Markdown path (.md)',
   versionRequired: 'Enter a material version',

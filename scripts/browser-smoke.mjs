@@ -1,22 +1,13 @@
 /** Keyless UI smoke against a real DSH profile with the plugin installed. */
 import { strict as assert } from 'node:assert'
-import { existsSync } from 'node:fs'
 import { mkdir, writeFile, mkdtemp } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { resolve, basename } from 'node:path'
 
-const { chromium } = createRequire(import.meta.url)('playwright')
+import { dismissStartup, launchBrowser, setLanguage } from './browser-harness.mjs'
 const target = process.env.DSH_TEST_URL
 const uninstalled = process.argv.includes('--uninstalled')
 if (!target) throw new Error('Set DSH_TEST_URL to the URL printed by the test profile')
-const executablePath = process.env.DSH_BROWSER_PATH ?? [
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Google/Chrome/Application/chrome.exe',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/chromium',
-].find(existsSync)
-if (!executablePath) throw new Error('Set DSH_BROWSER_PATH to an installed Chromium browser')
-const output = resolve('artifacts')
+const output = resolve(process.env.DSH_TEST_OUTPUT_DIR ?? 'artifacts')
 await mkdir(output, { recursive: true })
 
 const copies = [
@@ -27,7 +18,7 @@ const copies = [
     count: value => `Click count: ${value}`, open: 'Open right sidebar', close: 'Close', next: 'Continue',
     choose: 'Choose workspace', defaultWorkspace: 'Default workspace', newTab: 'New tab', guide: 'Start', fullscreen: 'Fullscreen' },
 ]
-const browser = await chromium.launch({ executablePath, headless: true })
+const browser = await launchBrowser()
 const report = { origin: new URL(target).origin, browser: await browser.version(), mode: uninstalled ? 'uninstalled' : 'installed', checks: [] }
 try {
   for (const copy of copies) {
@@ -44,16 +35,8 @@ try {
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); if(message.type() === 'warning') console.log(message.text()) })
     try {
       await page.goto(target)
-      // First-use preview and credential prompts are optional; no credentials or model calls are needed.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const dialog = page.getByRole('dialog')
-        try { await dialog.waitFor({ state: 'visible', timeout: 2000 }) }
-        catch (error) { if (error.name === 'TimeoutError') break; throw error }
-        const next = dialog.getByRole('button', { name: copy.next, exact: true })
-        if (await next.isVisible()) await next.click()
-        else await dialog.getByRole('button', { name: copy.close, exact: true }).click()
-        await dialog.waitFor({ state: 'hidden' })
-      }
+      await dismissStartup(page)
+      await setLanguage(page, copy.locale === 'zh-CN' ? '中文' : 'English')
       const workspaceReply = await page.evaluate(async path => {
         const response = await fetch('api/workspace/create', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method:'workspace/create',payload:{args:{request:{path}}}})});
         return response.json();
@@ -61,9 +44,10 @@ try {
       assert.equal(workspaceReply.result.ok,true,JSON.stringify(workspaceReply));
       if (await page.getByRole('button', { name: copy.choose, exact: true }).isVisible()) {
         await page.getByRole('button', { name: copy.choose, exact: true }).click()
-        const sessionCreated = page.waitForResponse(response => response.url().includes('/api/session/create') && response.status() === 200)
-        await page.getByRole('menuitem', { name: fixtureName, exact: true }).click()
-        await sessionCreated
+        await Promise.all([
+          page.waitForResponse(response => response.url().includes('/api/session/create') && response.status() === 200),
+          page.getByRole('menuitem', { name: fixtureName, exact: true }).click(),
+        ])
       }
       if (uninstalled) {
         await page.getByRole('button', { name: copy.open, exact: true }).click()
@@ -112,6 +96,13 @@ try {
       await page.setViewportSize({width:390,height:844});
       await body.getByRole('tab',{name:labels.models,exact:true}).click();
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await body.getByRole('button', { name: zh ? '更多' : 'More', exact: true }).click();
+      const mobileMenu = page.getByRole('menu');
+      const mobileMenuBox = await mobileMenu.boundingBox();
+      assert.ok(mobileMenuBox.x >= 0 && mobileMenuBox.y >= 0 && mobileMenuBox.x + mobileMenuBox.width <= 390 && mobileMenuBox.y + mobileMenuBox.height <= 844);
+      await page.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-mobile-menu.png')});
+      await page.keyboard.press('Escape');
+      assert.equal(await mobileMenu.count(), 0);
       await page.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-mobile-dark.png')});
       await page.emulateMedia({colorScheme:'light'});
       await page.screenshot({ animations: 'disabled', path:resolve(output,copy.locale+'-mobile-light.png')});
@@ -121,7 +112,7 @@ try {
       assert.equal(await page.locator('vite-error-overlay').count(), 0)
       assert.deepEqual(errors.filter(error => !error.startsWith('[deepseek-account] account read failed')), [])
       report.checks.push({ locale: copy.locale, result: 'passed', viewports: ['1440x1000', '390x844'],
-        scenarios: ['native entry', 'real Host initialization', 'explicit demo', 'stage advance', 'cancel acknowledgment', 'four views', 'light/dark', '390px'], errors })
+        scenarios: ['native entry', 'real Host initialization', 'explicit demo', 'stage advance', 'cancel acknowledgment', 'four views', 'light/dark', '390px', '390px menu fits and closes'], errors })
     } catch (error) {
       await page.screenshot({ animations: 'disabled',  path: resolve(output, `${copy.locale}-failure.png`) })
       report.checks.push({ locale: copy.locale, result: 'failed', error: String(error), errors })

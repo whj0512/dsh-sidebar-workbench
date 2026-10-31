@@ -6,6 +6,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { WORKBENCH_ID, workbenchDefinition } from './shell/definition.ts'
 import { en, zh } from './i18n/locales.ts'
 import { Workbench } from './Workbench.tsx'
+import { WorkbenchSeat, workbenchChildren } from './WorkbenchSeat.tsx'
 import { WorkbenchTitle } from './shell/WorkbenchTitle.tsx'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkbenchData } from './state/data.ts'
@@ -13,6 +14,7 @@ import { DraftGuard } from './state/draft-guard.ts'
 import { createViewStore } from './state/view-store.ts'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import { remoteContribution } from '../shared/remote.ts'
+import { materialFiles } from './project/file-lookup.ts'
 import stylesheet from './styles/Workbench.module.css?inline'
 
 export const inject = ['slots', 'locale', 'sidebarRightTabs', 'workspaces', 'remote']
@@ -33,7 +35,7 @@ function install(ctx: Context): void {
     if (!result.ok) throw new Error(result.error.code)
     return result.value
   })
-  const store = createViewStore() // Create a view store for managing the workbench UI state
+  const store = createViewStore()
   const drafts = new DraftGuard(window) // Create a draft guard to manage unsaved changes in the workbench
   ctx.effect(() => () => drafts.dispose(), 'workbench: draft unload guard')
   ctx.effect(() => () => data.dispose(), 'workbench: domain lifetime')
@@ -48,15 +50,24 @@ function install(ctx: Context): void {
     return () => style.remove()
   }, 'workbench: stylesheet') // Register the stylesheet for the workbench
   ctx.effect(() => ctx.sidebarRightTabs.register(workbenchDefinition(t)), 'workbench: page') // Register the workbench page in the right sidebar
-  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
-    { name: 'sidebar.right.pane.tab', key: WORKBENCH_ID, locale: namespace, store,
-      inject: (sessionId) => ({ draftChanged: (key, dirty) => drafts.update(`${sessionId}:${key}`, dirty), hooks: { workbench: data.source(sessionId) },
-        start: (operation, scope, scenario) => { data.start(sessionId, operation, scope, scenario) },
-        act: (id, action) => data.act(id, action),
-        project: (action, fields) => { void data.project(sessionId, action, fields) },
-      } satisfies import('./Workbench.tsx').WorkbenchInjected),
-    }, Workbench,
-  )), 'workbench: body')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', function* () {
+    yield ctx.slots.register(
+      { name: 'sidebar.right.pane.tab', key: WORKBENCH_ID, children: workbenchChildren,
+        inject: (sessionId) => ({ sessionId, draftChanged: (key, dirty, signal) => drafts.update(key, dirty, signal), hooks: { workbench: data.source(sessionId) },
+          start: (operation, scope, scenario) => { data.start(sessionId, operation, scope, scenario) },
+          act: (id, action) => data.act(id, action),
+          listFiles: async query => {
+            const snapshot = data.source(sessionId).getSnapshot()
+            if (snapshot.phase !== 'ready' || !snapshot.workspace) throw new Error('unbound')
+            const response = await ctx.remote.workbench.command({ action: 'files', sessionId, workspaceId: snapshot.workspace.workspaceId, query })
+            return materialFiles(response)
+          },
+          project: (action, fields) => { void data.project(sessionId, action, fields) },
+        } satisfies import('./Workbench.tsx').WorkbenchInjected),
+      }, WorkbenchSeat,
+    )
+    yield ctx.slots.register({ name: 'sidebar.right.pane.tab.workbench', locale: namespace, store }, Workbench)
+  }), 'workbench: body')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab.title', key: WORKBENCH_ID, locale: namespace }, WorkbenchTitle,
   )), 'workbench: title')
