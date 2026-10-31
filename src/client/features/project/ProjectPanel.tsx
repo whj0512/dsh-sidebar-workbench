@@ -1,11 +1,28 @@
 /** Current workspace identity and explicit Host project commands. */
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { Page } from '../state/view-store.ts'
-import css from '../styles/Workbench.module.css'
-import type { DataSnapshot } from '../state/data.ts'
-import type { WorkbenchInjected } from '../workbench-types.ts'
+import type { Page } from '../../state/view-store.ts'
+import css from '../../styles/Workbench.module.css'
+import type { DataSnapshot } from '../../state/data.ts'
+import type { WorkbenchInjected } from '../../app/workbench-types.ts'
+
+function RelinkConfirmation({ t, result, project, loading }: Pick<Parameters<typeof ProjectPanel>[0], 't' | 'result' | 'project' | 'loading'>) {
+  const [confirmed, setConfirmed] = useState(false)
+  const relink = result?.relink
+  if (!relink) return null
+  return <section aria-label={t('relink')}>
+    <h3>{t('relink')}</h3>
+    <p className={css.path}>{t('previousBinding')}: {relink.previousWorkspaceId} · {relink.previousRoot}</p>
+    <p className={css.path}>{t('nextBinding')}: {relink.nextWorkspaceId} · {relink.nextRoot}</p>
+    <p>{t('bindingRevision')}: {relink.revision} → {relink.revision + 1}</p>
+    <p>{t(relink.unsettled ? 'problem_unsettled' : 'noUnsettledRuns')}</p>
+    <label className={css.row}><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />{t('confirmRelink')}</label>
+    <Button disabled={loading || !confirmed || relink.unsettled} onClick={() => project('relink', {
+      expectedProjectId: result?.project?.projectId, expectedRevision: relink.revision,
+    })}>{t('relink')}</Button>
+  </section>
+}
 
 /** @param props - Project facts, independent of draft and demo run state. @returns Project status and actions. */
 export const ProjectPanel = memo(function ProjectPanel({ t, phase, loading, result, project, go }: { t: TranslateNS<'sidebarWorkbench'>; phase: DataSnapshot['phase']; loading: boolean; result: DataSnapshot['projectResult']; project: WorkbenchInjected['project']; go: (page: Page) => void }) {
@@ -26,6 +43,7 @@ export const ProjectPanel = memo(function ProjectPanel({ t, phase, loading, resu
       {phase === 'ready' && (
         <>
           <div className={css.actions}>
+            {result?.ok && result.project?.materials && !result.binding && <Button disabled={loading} onClick={() => project('initialize', { materials: result.project!.materials! })}>{t('recoverBinding')}</Button>}
             {!result?.project && (
               <Button
                 className={css.primaryButton}
@@ -40,48 +58,12 @@ export const ProjectPanel = memo(function ProjectPanel({ t, phase, loading, resu
               className={css.secondaryButton}
               variant="outline"
               disabled={loading}
-              onClick={() => project('discover')}
-            >
-              {t('identify')}
-            </Button>
-            <Button
-              className={css.secondaryButton}
-              variant="outline"
-              disabled={loading}
               onClick={() => project('inspect')}
             >
               {t('refresh')}
             </Button>
           </div>
-          {result?.discovered?.map(a => (
-            <p key={a.path}>
-              {a.path} · {t(a.status)} · {t(a.validation)}
-            </p>
-          ))}
-          {result?.discovered?.some(a => a.status === 'recognized') && (
-            <Button
-              className={css.secondaryButton}
-              variant="outline"
-              disabled={loading}
-              onClick={() => project('adopt')}
-            >
-              {t('adoptDiscovery')}
-            </Button>
-          )}
-          {result?.problem === 'relink' && (
-            <Button
-              className={css.secondaryButton}
-              variant="outline"
-              disabled={loading}
-              onClick={() =>
-                project('relink', {
-                  expectedProjectId: result?.project?.projectId,
-                })
-              }
-            >
-              {t('relink')}
-            </Button>
-          )}
+          {result?.problem === 'relink' && <RelinkConfirmation key={`${result.project?.projectId}:${result.relink?.revision}:${result.relink?.nextRoot}`} t={t} result={result} project={project} loading={loading} />}
           <details>
             <summary>{t('relink')}</summary>
             <p>{t('relinkHelp')}</p>

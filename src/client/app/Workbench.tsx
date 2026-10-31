@@ -1,19 +1,21 @@
 /** Native sidebar presentation; all execution facts arrive from the injected domain object. */
-import { useCallback, useEffect, useId, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, type ReactNode } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
-import { initialView, type Page, type View } from './state/view-store.ts'
-import type { Operation, Run, Scenario } from '../shared/workflow.ts'
-import type { } from './i18n/locales.ts'
-import css from './styles/Workbench.module.css'
-import { MaterialsForm } from './project/MaterialsForm.tsx'
-import { WorkbenchChrome } from './shell/WorkbenchChrome.tsx'
-import { latestRun } from './runs/run-selection.ts'
+import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
+import { initialView, type Page, type View } from '../state/view-store.ts'
+import type { Operation, Run, Scenario } from '../../shared/workflow.ts'
+import type { } from '../i18n/locales.ts'
+import css from '../styles/Workbench.module.css'
+import { MaterialsForm } from '../features/project/MaterialsForm.tsx'
+import { WorkbenchChrome } from '../components/WorkbenchChrome.tsx'
+import { latestRun } from '../features/runs/run-selection.ts'
 import type { WorkbenchProps } from './workbench-types.ts'
 export type { WorkbenchProps, WorkbenchInjected } from './workbench-types.ts'
-import { ModelsPanel } from './models/ModelsPanel.tsx'
-import { ProjectPanel } from './project/ProjectPanel.tsx'
-import { WorkflowOverview } from './shell/WorkflowOverview.tsx'
-import { RunHistory, ArtifactList, RemoteConfirmation } from './runs/RunViews.tsx'
+import { ModelsPanel } from '../features/models/ModelsPanel.tsx'
+import { ProjectPanel } from '../features/project/ProjectPanel.tsx'
+import { ProjectSummary } from '../features/project/ProjectSummary.tsx'
+import { WorkflowOverview } from '../components/WorkflowOverview.tsx'
+import { RunHistory, ArtifactList, RemoteConfirmation } from '../features/runs/RunViews.tsx'
 const EMPTY_RUNS: readonly Run[] = []
 
 /** @param props - Framework-bound hooks, view state and commands. @returns Workspace-following workbench. */
@@ -27,7 +29,19 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
   const selectModel = useCallback((model: string) => change({ model }), [change])
   const toggleDemo = useCallback(() => change({ demo: !view.demo, page: 'flow' }), [change, view.demo])
   const materialFields = useMemo(() => ({ original: view.original, markdown: view.markdown, version: view.version, sameVersion: view.sameVersion }), [view.original, view.markdown, view.version, view.sameVersion])
-  const initialize = useCallback(() => project('initialize', { materials: { ...materialFields, sameVersion: true } }), [project, materialFields])
+  const initializing = useRef<string>()
+  const initialize = useCallback(() => {
+    initializing.current = bucket
+    project('initialize', { materials: { ...materialFields, sameVersion: true } })
+  }, [project, materialFields, bucket])
+  useEffect(() => {
+    if (initializing.current !== bucket) { initializing.current = undefined; return }
+    if (!data.projectLoading && data.projectResult?.ok && data.projectResult.binding && data.projectResult.project?.materials) {
+      initializing.current = undefined
+      go('flow')
+    }
+  }, [bucket, data.projectLoading, data.projectResult, go])
+  const openMaterial = useCallback((path: string) => tab.actions.openResource(sessionFileAddress(sessionId, path)), [tab.actions, sessionId])
   const uid = useId()
   const primary = ['models', 'tests', 'graph'].includes(view.page) ? view.page : 'flow'
   const launch = useCallback((operation: Operation) => {
@@ -91,6 +105,8 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             go={go}
           />
         )}
+        {!view.demo && ['flow', 'settings', 'artifacts'].includes(view.page) && data.projectResult && (data.projectResult.project || data.projectResult.resources) &&
+          <ProjectSummary t={t} result={data.projectResult} openFile={openMaterial} unavailable={data.phase !== 'ready' || !data.projectResult.ok} />}
         {view.page === 'flow' && (
           <WorkflowOverview t={t} go={go} />
         )}
@@ -98,17 +114,18 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
           <>
             <h2>{t('settings')}</h2>
             <p>{t('materialHelp')}</p>
-            <MaterialsForm
+            {!data.projectResult?.project && <MaterialsForm
               key={bucket}
               t={t}
               listFiles={listFiles}
+              openFile={openMaterial}
               fields={materialFields}
               change={change}
               unavailable={view.demo || data.phase !== 'ready'}
               loading={data.projectLoading}
               problem={data.projectResult?.problem}
               initialize={initialize}
-            />
+            />}
             <label>
               {t('draft')}
               <textarea

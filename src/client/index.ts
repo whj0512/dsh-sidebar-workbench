@@ -3,18 +3,18 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { WORKBENCH_ID, workbenchDefinition } from './shell/definition.ts'
+import { WORKBENCH_ID, workbenchDefinition } from './components/definition.ts'
 import { en, zh } from './i18n/locales.ts'
-import { Workbench } from './Workbench.tsx'
-import { WorkbenchSeat, workbenchChildren } from './WorkbenchSeat.tsx'
-import { WorkbenchTitle } from './shell/WorkbenchTitle.tsx'
+import { Workbench } from './app/Workbench.tsx'
+import { WorkbenchSeat, workbenchChildren } from './app/WorkbenchSeat.tsx'
+import { WorkbenchTitle } from './components/WorkbenchTitle.tsx'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkbenchData } from './state/data.ts'
 import { DraftGuard } from './state/draft-guard.ts'
 import { createViewStore } from './state/view-store.ts'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import { remoteContribution } from '../shared/remote.ts'
-import { materialFiles } from './project/file-lookup.ts'
+import { materialFiles } from './features/project/file-lookup.ts'
 import stylesheet from './styles/Workbench.module.css?inline'
 
 export const inject = ['slots', 'locale', 'sidebarRightTabs', 'workspaces', 'remote']
@@ -63,7 +63,7 @@ function install(ctx: Context): void {
             return materialFiles(response)
           },
           project: (action, fields) => { void data.project(sessionId, action, fields) },
-        } satisfies import('./Workbench.tsx').WorkbenchInjected),
+        } satisfies import('./app/Workbench.tsx').WorkbenchInjected),
       }, WorkbenchSeat,
     )
     yield ctx.slots.register({ name: 'sidebar.right.pane.tab.workbench', locale: namespace, store }, Workbench)

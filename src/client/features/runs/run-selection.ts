@@ -1,5 +1,5 @@
 /** Read-only selection over chronological run snapshots. */
-import type { Run } from '../../shared/workflow.ts'
+import type { Run } from '../../../shared/workflow.ts'
 
 /** @param runs - Oldest-first runs. @param matches - Selection predicate. @returns Latest match without copying or reordering runs. */
 export function latestRun(runs: readonly Run[], matches: (run: Run) => boolean): Run | undefined {

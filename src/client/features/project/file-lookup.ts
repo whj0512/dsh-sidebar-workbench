@@ -1,6 +1,6 @@
 /** Interpret workspace file responses without treating an incompatible Host as an empty directory. */
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ProjectResult } from '../../shared/project.ts'
+import type { ProjectResult } from '../../../shared/project.ts'
 
 /** The running Host does not accept or return the file lookup protocol. */
 export class FileLookupVersionError extends Error {}

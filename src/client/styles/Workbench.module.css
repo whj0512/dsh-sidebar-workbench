@@ -76,3 +76,6 @@
   display: block;
   width: 100%;
 }
+.root .pathPicker .field { display: flex; width: 100%; box-sizing: border-box; }
+.materialReference { display: block; max-width: 100%; margin-top: 8px; }
+.resourceEntry { min-width: 0; padding: 12px 0; border-top: .5px solid var(--workbench-line); overflow-wrap: anywhere; }

@@ -1,16 +1,18 @@
 /** Workspace file completion using the Host menu primitive. */
 import { forwardRef, useEffect, useState, type InputHTMLAttributes } from 'react'
-import { Input, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkbenchInjected } from '../workbench-types.ts'
-import type { ProjectResult } from '../../shared/project.ts'
-import css from '../styles/Workbench.module.css'
+import { Input, Menu, ReferenceChip } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { WorkbenchInjected } from '../../app/workbench-types.ts'
+import type { ProjectResult } from '../../../shared/project.ts'
+import css from '../../styles/Workbench.module.css'
 import { FileLookupVersionError } from './file-lookup.ts'
 
 /** @param props - Controlled relative path and workspace-bound file lookup. @returns An input with an @ directory menu. */
 export const MaterialPathInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & {
   value: string; onChange: (value: string) => void; listFiles: WorkbenchInjected['listFiles']; extension: RegExp
   emptyLabel: string; failedLabel: string; versionLabel: string; loadingLabel: string
-}>(function MaterialPathInput({ value, onChange, listFiles, extension, emptyLabel, failedLabel, versionLabel, loadingLabel, ...input }, ref) {
+  openFile?: (path: string) => void; previewFailedLabel: string
+}>(function MaterialPathInput({ value, onChange, listFiles, extension, emptyLabel, failedLabel, versionLabel, loadingLabel, openFile, previewFailedLabel, ...input }, ref) {
+  const [failedPreview, setFailedPreview] = useState<string | null>(null)
   const [items, setItems] = useState<NonNullable<ProjectResult['files']>>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'incompatible'>('loading')
   const [dismissed, setDismissed] = useState(false)
@@ -31,7 +33,9 @@ export const MaterialPathInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttr
     if (!item) return
     onChange(item.directory ? `@${item.path}/` : item.path)
   }
-  return <Menu open={open} portal minWidthFromAnchor className={css.pathPicker}
+  const canPreview = openFile && !input.disabled && !value.startsWith('@') && extension.test(value)
+    && !/^(?:[\\/]|[a-z]:)/i.test(value) && !value.split(/[\\/]/).some(part => !part || part === '.' || part === '..')
+  return <><Menu open={open} portal minWidthFromAnchor className={css.pathPicker}
     onClose={() => setDismissed(true)} onSelect={pick}
     items={state === 'ready' && visible.length ? visible.map(item => ({ id: item.path, label: `${item.path}${item.directory ? '/' : ''}` }))
       : [{ id: 'status', label: state === 'loading' ? loadingLabel : state === 'incompatible' ? versionLabel : state === 'error' ? failedLabel : emptyLabel, disabled: true }]}
@@ -42,4 +46,10 @@ export const MaterialPathInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttr
         if (open && event.key === 'Escape') { event.preventDefault(); setDismissed(true) }
       }} />}
   />
+    {canPreview && <span className={css.materialReference}><ReferenceChip appearance="file" label={value} title={value} onActivate={() => {
+      try { openFile(value); setFailedPreview(null) }
+      catch (error) { setFailedPreview(value) }
+    }} /></span>}
+    {canPreview && failedPreview === value && <span role="alert" className={css.fieldError}>{previewFailedLabel}</span>}
+  </>
 })

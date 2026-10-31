@@ -2,8 +2,8 @@
 import { memo } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { Operation } from '../../shared/workflow.ts'
-import css from '../styles/Workbench.module.css'
+import type { Operation } from '../../../shared/workflow.ts'
+import css from '../../styles/Workbench.module.css'
 const MODEL_KINDS = ['Environment', 'ExternalScenario', 'Statechart', 'DialogMap'] as const
 
 /** @param props - Model display facts and explicit commands. @returns Model controls and evidence. */

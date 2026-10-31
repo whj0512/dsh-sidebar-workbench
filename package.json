@@ -81,6 +81,7 @@
     "@deepseek-ai/dsh-storage-domain": "link:../deepseek-harness/packages/storage/storage-domain",
     "@deepseek-ai/dsh-typert-protocol": "link:../deepseek-harness/packages/typert/protocol",
     "@deepseek-ai/dsh-typert-registry": "link:../deepseek-harness/packages/typert/registry",
+    "@deepseek-ai/dsh-util-workspace-path": "link:../deepseek-harness/packages/util/workspace-path",
     "@deepseek-ai/dsh-workspace": "link:../deepseek-harness/packages/workspace/workspace",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^22.20.1",
@@ -96,6 +97,9 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.11.2",
+    "fflate": "^0.8.3",
+    "pdf-lib": "^1.17.1",
     "zod": "4.4.3"
   }
 }

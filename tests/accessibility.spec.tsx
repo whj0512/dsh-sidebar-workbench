@@ -3,10 +3,10 @@ import { useState } from 'react'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { MaterialsForm } from '../src/client/project/MaterialsForm.tsx'
+import { MaterialsForm } from '../src/client/features/project/MaterialsForm.tsx'
 import { DraftGuard } from '../src/client/state/draft-guard.ts'
 import { en } from '../src/client/i18n/locales.ts'
-import { FileLookupVersionError, materialFiles } from '../src/client/project/file-lookup.ts'
+import { FileLookupVersionError, materialFiles } from '../src/client/features/project/file-lookup.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
 afterEach(cleanup)
@@ -25,12 +25,13 @@ it('distinguishes an incompatible running Host from an empty directory and displ
 
 it('selects workspace material paths with @ while keeping version as text and Enter out of submission', async () => {
   const initialize = vi.fn()
+  const openFile = vi.fn()
   const listFiles = vi.fn(async (query: string) => query === 'docs/'
     ? [{ path: 'docs/原文.pdf', directory: false }, { path: 'docs/原文.md', directory: false }]
     : [{ path: 'docs', directory: true }])
   function Form() {
     const [fields, setFields] = useState(empty)
-    return <MaterialsForm t={t} fields={fields} change={patch => setFields(current => ({ ...current, ...patch }))} initialize={initialize} unavailable={false} loading={false} problem={undefined} listFiles={listFiles} />
+    return <MaterialsForm t={t} fields={fields} change={patch => setFields(current => ({ ...current, ...patch }))} initialize={initialize} unavailable={false} loading={false} problem={undefined} listFiles={listFiles} openFile={openFile} />
   }
   render(<Form />)
   const fields = screen.getAllByRole('textbox')
@@ -42,6 +43,9 @@ it('selects workspace material paths with @ while keeping version as text and En
   fireEvent.keyDown(fields[0]!, { key: 'Enter' })
   expect(fields[0]?.getAttribute('value')).toBe('docs/原文.pdf')
   expect(initialize).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'docs/原文.pdf' }))
+  expect(openFile).toHaveBeenCalledWith('docs/原文.pdf')
+  expect(initialize).not.toHaveBeenCalled()
   fireEvent.change(fields[1]!, { target: { value: '@docs/' } })
   fireEvent.click(await screen.findByRole('menuitem', { name: 'docs/原文.md' }))
   fireEvent.change(fields[2]!, { target: { value: 'V2' } })
@@ -49,6 +53,18 @@ it('selects workspace material paths with @ while keeping version as text and En
   fireEvent.click(screen.getByRole('checkbox'))
   fireEvent.click(screen.getByRole('button', { name: en.initialize }))
   expect(initialize).toHaveBeenCalledTimes(1)
+})
+
+it('reports preview navigation failures and allows retry without submitting the form', () => {
+  const openFile = vi.fn().mockImplementationOnce(() => { throw new Error('Unavailable resource') })
+  const initialize = vi.fn()
+  render(<MaterialsForm t={t} fields={{ ...empty, original: 'docs/原文.pdf', markdown: '@docs/' }} change={vi.fn()} initialize={initialize} unavailable={false} loading={false} problem={undefined} openFile={openFile} />)
+  fireEvent.click(screen.getByRole('button', { name: 'docs/原文.pdf' }))
+  expect(screen.getByRole('alert').textContent).toBe(en.filePreviewFailed)
+  fireEvent.click(screen.getByRole('button', { name: 'docs/原文.pdf' }))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('button', { name: '@docs/' })).toBeNull()
+  expect(initialize).not.toHaveBeenCalled()
 })
 
 it('allows invalid submission, identifies each field, and focuses the first error without sending a command', () => {

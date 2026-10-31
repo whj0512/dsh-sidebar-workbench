@@ -3,9 +3,12 @@
 import { mkdtemp, writeFile, readFile, mkdir, rm, cp, symlink, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { PDFDocument } from 'pdf-lib'
+import { zipSync, strToU8 } from 'fflate'
+import { resolveProjectConfig, inspectMaterial } from '../src/host/material-inspection.ts'
 import { afterEach, expect, it } from 'vitest'
 import { ProjectService, confined } from '../src/host/project-service.ts'
-import type { ProjectBinding, ProjectCommand } from '../src/shared/project.ts'
+import { commandSchema, type ProjectBinding, type ProjectCommand } from '../src/shared/project.ts'
 import type { RegistryWorkspace as Workspace } from '../src/host/project-service.ts'
 
 const roots: string[] = []
@@ -13,7 +16,7 @@ afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, {
 async function fixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-workbench-'))); roots.push(root)
   const path = join(root, 'project'); await mkdir(path)
-  await writeFile(join(path, 'source.pdf'), 'original'); await writeFile(join(path, 'source.md'), '# source')
+  const pdf = await PDFDocument.create(); pdf.addPage(); await writeFile(join(path, 'source.pdf'), await pdf.save()); await writeFile(join(path, 'source.md'), '# source')
   let workspaces: Workspace[] = [{ id: 'w1', path, sessionIds: ['s1'], title: 'One' }].map(w => ({ ...w, id: w.id as Workspace['id'], sessionIds: w.sessionIds.map(id => id as Workspace['sessionIds'][number]) }))
   const records = new Map<string, ProjectBinding>()
   let fail = false
@@ -24,7 +27,7 @@ async function fixture() {
 it('A01/A22 concurrent initialization shares one identity and preserves source files', async () => {
   const f = await fixture(); const results = await Promise.all(Array.from({ length: 5 }, () => f.service.execute(f.request)))
   expect(results.every(r => r.ok)).toBe(true); expect(new Set(results.map(r => r.project?.projectId)).size).toBe(1)
-  expect(f.records.size).toBe(1); expect(await readFile(join(f.path, 'source.pdf'), 'utf8')).toBe('original')
+  expect(f.records.size).toBe(1); expect((await readFile(join(f.path, 'source.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')
   expect(results[0]?.project?.baseline).toBeNull(); expect(results[0]?.project?.validation).toBe('not-checked')
   await f.service.close()
 })
@@ -34,28 +37,21 @@ it('A22 recovers a published manifest after binding persistence failed', async (
   f.fail(false); const result = await f.service.execute(f.request)
   expect(result.project?.projectId).toBe(manifest.projectId); expect(result.ok).toBe(true); await f.service.close()
 })
-it('adopts discovered files into an initialized project and preserves its identity and materials', async () => {
+it('rejects removed discovery commands and requires materials even when existing artifacts are present', async () => {
   const f = await fixture()
-  const initial = await f.service.execute(f.request)
-  await writeFile(join(f.path, 'chunks.json'), '{}')
-  const adopted = await f.service.execute({ ...f.request, action: 'adopt', materials: undefined })
-  expect(adopted.ok).toBe(true)
-  expect(adopted.project).toEqual({ ...initial.project, artifacts: ['chunks.json'] })
-  const again = await f.service.execute({ ...f.request, action: 'adopt' })
-  expect(again.project?.artifacts).toEqual(['chunks.json'])
-  const stored = JSON.parse(await readFile(join(f.path, '.workbench/project.json'), 'utf8'))
-  expect(stored).toEqual(adopted.project)
-  expect(await readFile(join(f.path, 'chunks.json'), 'utf8')).toBe('{}')
-  await f.service.close()
-})
-it('rejects adoption without recognized files while preserving an initialized manifest', async () => {
-  const f = await fixture()
-  await f.service.execute(f.request)
-  const before = await readFile(join(f.path, '.workbench/project.json'), 'utf8')
-  const result = await f.service.execute({ ...f.request, action: 'adopt' })
-  expect(result.problem).toBe('materials')
-  expect(await readFile(join(f.path, '.workbench/project.json'), 'utf8')).toBe(before)
-  await f.service.close()
+  try {
+    await writeFile(join(f.path, 'chunks.json'), '{}')
+    for (const action of ['discover', 'adopt']) expect(commandSchema.safeParse({ ...f.request, action }).success).toBe(false)
+    expect((await f.service.execute({ ...f.request, materials: undefined })).problem).toBe('materials')
+    await expect(readFile(join(f.path, '.workbench/project.json'))).rejects.toThrow()
+    const result = await f.service.execute(f.request)
+    expect(result.ok).toBe(true)
+    expect(result.project?.materials).toEqual(f.request.materials)
+    expect(result.project?.baseline).toBeNull()
+    expect(result.project?.artifacts).toEqual([])
+    expect(JSON.parse(await readFile(join(f.path, '.workbench/project.json'), 'utf8')).materials).toEqual(f.request.materials)
+    expect(await readFile(join(f.path, 'chunks.json'), 'utf8')).toBe('{}')
+  } finally { await f.service.close() }
 })
 it('A25/A27 requires explicit reassociation, preserves old revision and rejects unknown old runs', async () => {
   const f = await fixture(); const initialized = await f.service.execute(f.request)
@@ -63,9 +59,9 @@ it('A25/A27 requires explicit reassociation, preserves old revision and rejects 
   const cmd = { ...f.request, workspaceId: 'w2', sessionId: 's2', action: 'inspect' as const }
   expect((await f.service.execute(cmd)).problem).toBe('relink')
   const old = f.records.get('w1')!; f.records.set('w1', { ...old, unsettledRuns: ['unknown-upload'] })
-  expect((await f.service.execute({ ...cmd, action: 'relink', expectedProjectId: initialized.project?.projectId })).problem).toBe('unsettled')
+  expect((await f.service.execute({ ...cmd, action: 'relink', expectedProjectId: initialized.project?.projectId, expectedRevision: 1 })).problem).toBe('unsettled')
   f.records.set('w1', old)
-  const r = await f.service.execute({ ...cmd, action: 'relink', expectedProjectId: initialized.project?.projectId })
+  const r = await f.service.execute({ ...cmd, action: 'relink', expectedProjectId: initialized.project?.projectId, expectedRevision: 1 })
   expect(r.ok).toBe(true); expect(r.binding?.revision).toBe(2); expect(old.revision).toBe(1); await f.service.close()
 })
 it('A28 rejects duplicate identities in copied directories', async () => {
@@ -82,15 +78,6 @@ it('A19/A26 rejects traversal, junctions, missing roots and mismatched Session m
   expect((await f.service.execute({ ...f.request, sessionId: 'other' })).problem).toBe('unbound')
   await rm(f.path, { recursive: true }); expect((await f.service.execute(f.request)).problem).toBe('directory'); await f.service.close()
 })
-it('A01 discovers only known files without creating metadata and keeps unsupported reports unvalidated', async () => {
-  const f = await fixture(); await writeFile(join(f.path, 'chunks.json'), '{}'); await writeFile(join(f.path, 'requirement_relations.json'), 'bad json')
-  const result = await f.service.execute({ ...f.request, action: 'discover' })
-  expect(result.discovered?.map(a => a.status)).toEqual(['recognized', 'unsupported', 'missing'])
-  await expect(readFile(join(f.path, '.workbench/project.json'))).rejects.toThrow()
-  const adopted = await f.service.execute({ ...f.request, action: 'adopt', materials: undefined })
-  expect(adopted.project?.validation).toBe('not-checked'); expect(adopted.project?.artifacts).toEqual(['chunks.json'])
-  await f.service.close(); expect((await f.service.execute(f.request)).problem).toBe('unavailable')
-})
 it('lists workspace files before initialization and rejects traversal, junctions and other sessions', async () => {
   const f = await fixture()
   await mkdir(join(f.path, 'docs'))
@@ -105,4 +92,77 @@ it('lists workspace files before initialization and rejects traversal, junctions
   expect((await f.service.execute({ ...command, query: '' })).files?.some(file => file.path === 'linked')).toBe(false)
   await expect(readFile(join(f.path, '.workbench/project.json'))).rejects.toThrow()
   await f.service.close()
+})
+
+it('persists material fingerprints and reports changed or missing files without rewriting the manifest', async () => {
+  const f = await fixture()
+  try {
+    const initialized = await f.service.execute(f.request)
+    expect(initialized.resources?.map(r => r.status)).toEqual(['valid', 'valid'])
+    expect(initialized.project?.resources?.every(r => r.sha256?.length === 64)).toBe(true)
+    const saved = await readFile(join(f.path, '.workbench/project.json'), 'utf8')
+    await writeFile(join(f.path, 'source.md'), '# updated content')
+    const inspected = await f.service.execute({ ...f.request, action: 'inspect' })
+    expect(inspected.resources?.find(r => r.kind === 'markdown')?.status).toBe('changed')
+    await rm(join(f.path, 'source.md'))
+    expect((await f.service.execute({ ...f.request, action: 'inspect' })).resources?.find(r => r.kind === 'markdown')?.status).toBe('missing')
+    expect(await readFile(join(f.path, '.workbench/project.json'), 'utf8')).toBe(saved)
+  } finally { await f.service.close() }
+})
+
+it('rejects disguised PDFs and empty Markdown before creating a project', async () => {
+  const f = await fixture()
+  try {
+    await writeFile(join(f.path, 'source.pdf'), 'not a PDF')
+    await writeFile(join(f.path, 'source.md'), '  ')
+    const result = await f.service.execute(f.request)
+    expect(result.problem).toBe('materials')
+    expect(result.resources?.map(r => r.status)).toEqual(['invalid-format', 'invalid-format'])
+    await expect(readFile(join(f.path, '.workbench/project.json'))).rejects.toThrow()
+  } finally { await f.service.close() }
+})
+
+it('checks DOCX package structure and enforces file and expanded XML limits', async () => {
+  const f = await fixture()
+  const path = join(f.path, 'source.docx')
+  const contentTypes = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+  const docx = zipSync({ '[Content_Types].xml': strToU8(contentTypes), 'word/document.xml': strToU8('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p/></w:body></w:document>') })
+  try {
+    await writeFile(path, docx)
+    expect((await inspectMaterial(path, 'source.docx', 'original', resolveProjectConfig({}))).status).toBe('valid')
+    expect((await inspectMaterial(path, 'source.docx', 'original', resolveProjectConfig({ maxMaterialBytes: 10 }))).status).toBe('too-large')
+    expect((await inspectMaterial(path, 'source.docx', 'original', resolveProjectConfig({ maxDocumentXmlBytes: 10 }))).status).toBe('invalid-format')
+    await writeFile(path, zipSync({ 'word/document.xml': strToU8('<broken') }))
+    expect((await inspectMaterial(path, 'source.docx', 'original', resolveProjectConfig({}))).status).toBe('invalid-format')
+    expect(() => resolveProjectConfig({ maxMaterialBytes: 0 })).toThrow()
+  } finally { await f.service.close() }
+})
+
+it('rejects a project nested below an initialized ancestor or above a deep descendant', async () => {
+  const f = await fixture()
+  try {
+    await f.service.execute(f.request)
+    const child = join(f.path, 'a', 'b'); await mkdir(child, { recursive: true })
+    f.setWorkspaces([{ id: 'w1' as Workspace['id'], path: child, sessionIds: ['s1' as Workspace['sessionIds'][number]] }])
+    // Use a new repository to avoid a root mismatch masking the ancestor check.
+    const nested = new ProjectService(() => [{ id: 'w1' as Workspace['id'], path: child, sessionIds: ['s1' as Workspace['sessionIds'][number]] }], { list: () => [], put: async () => {} })
+    try { expect((await nested.execute(f.request)).problem).toBe('conflict') } finally { await nested.close() }
+    const parent = new ProjectService(() => [{ id: 'w1' as Workspace['id'], path: f.root, sessionIds: ['s1' as Workspace['sessionIds'][number]] }], { list: () => [], put: async () => {} })
+    try { expect((await parent.execute(f.request)).problem).toBe('conflict') } finally { await parent.close() }
+  } finally { await f.service.close() }
+})
+
+it('reopens a published project and requires the displayed revision before moving a binding', async () => {
+  const f = await fixture()
+  try {
+    const initial = await f.service.execute(f.request)
+    f.setWorkspaces([{ id: 'w2' as Workspace['id'], path: f.path, sessionIds: ['s2' as Workspace['sessionIds'][number]] }])
+    const command = { ...f.request, workspaceId: 'w2', sessionId: 's2' }
+    const inspection = await f.service.execute({ ...command, action: 'inspect' })
+    expect(inspection.relink).toMatchObject({ previousWorkspaceId: 'w1', nextWorkspaceId: 'w2', previousRoot: f.path, nextRoot: f.path, revision: 1, unsettled: false })
+    expect((await f.service.execute({ ...command, action: 'relink', expectedProjectId: initial.project?.projectId, expectedRevision: 0 })).problem).toBe('identity')
+    expect((await f.service.execute({ ...command, action: 'relink', expectedProjectId: initial.project?.projectId, expectedRevision: 1 })).binding?.revision).toBe(2)
+    expect((await f.service.execute({ ...command, action: 'inspect' })).problem).toBeUndefined()
+    expect(initial.project?.materials).toEqual(f.request.materials)
+  } finally { await f.service.close() }
 })

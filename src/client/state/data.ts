@@ -29,6 +29,7 @@ export class WorkbenchData {
   private request = 0
   private memberships = new Map<string, WorkspaceView>()
   private results = new Map<string, ProjectResult>()
+  private resultRoots = new Map<string, string>()
   private loading = new Set<string>()
   private generations = new Map<string, number>()
   private unsubscribe: () => void
@@ -52,12 +53,12 @@ export class WorkbenchData {
           phase: source.state === 'error' ? 'error' : source.phase === 'pending' ? 'loading' : member ? 'ready' : workspace ? 'removed' : 'unbound',
           runs: this.executor.list().filter(r => r.request.binding.workspaceId === key),
           baseline: this.baselines.get(key) ?? 'V1', adopted: this.baselines.has(key),
-          projectResult: this.results.get(key), projectLoading: this.loading.has(key) }
+          projectResult: this.resultRoots.get(key) === workspace?.path ? this.results.get(key) : undefined, projectLoading: this.loading.has(key) }
         this.cache.set(sessionId, snapshot); return snapshot
       } }
   }
   /** @param sessionId - Initiating Session. @param action - Explicit project command. @param fields - Materials or reassociation identity. */
-  async project(sessionId: string, action: ProjectCommand['action'], fields: Pick<ProjectCommand, 'materials' | 'expectedProjectId'> = {}): Promise<void> {
+  async project(sessionId: string, action: ProjectCommand['action'], fields: Pick<ProjectCommand, 'materials' | 'expectedProjectId' | 'expectedRevision'> = {}): Promise<void> {
     const source = this.workspaces.list.getSnapshot()
     const ws = workspaceFor(source, sessionId)
     if (source.phase !== 'ready' || source.state === 'error' || !ws || !this.remote || this.loading.has(ws.workspaceId)) return
@@ -66,11 +67,18 @@ export class WorkbenchData {
     this.generations.set(key, generation); this.loading.add(key); this.changed()
     try {
       const result = resultSchema.parse(await this.remote({ action, sessionId, workspaceId: key, ...fields }))
-      if (this.generations.get(key) === generation) this.results.set(key, result)
+      const current = workspaceFor(this.workspaces.list.getSnapshot(), sessionId)
+      if (current?.workspaceId === key && current.path === ws.path && this.generations.get(key) === generation) {
+        this.results.set(key, result); this.resultRoots.set(key, ws.path)
+      }
     } catch (error) {
       // Transport and validation failures leave existing project facts visible; no mutation is retried.
       console.warn('Workbench project request failed', error instanceof Error ? error.message : 'Invalid response')
-      if (this.generations.get(key) === generation) this.results.set(key, { ...this.results.get(key), ok: false, problem: 'unavailable' })
+      const current = workspaceFor(this.workspaces.list.getSnapshot(), sessionId)
+      if (current?.workspaceId === key && current.path === ws.path && this.generations.get(key) === generation) {
+        const previous = this.resultRoots.get(key) === ws.path ? this.results.get(key) : undefined
+        this.results.set(key, { ...previous, ok: false, problem: 'unavailable' }); this.resultRoots.set(key, ws.path)
+      }
     } finally { this.loading.delete(key); this.changed() }
   }
   /** @param sessionId - Owning Session. @param operation - Explicit demo action. @param scope - Selected features. @param scenario - Controlled adapter outcome. @returns Created demo runs. */

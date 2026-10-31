@@ -51,12 +51,12 @@ src/
   shared/remote.ts            Remote 描述及 Client contribution
   shared/workflow.ts          demo 状态机、阶段和工作流类型
   client/index.ts             Client 注册、注入与释放
-  client/Workbench.tsx        工作区视图读取、命令协调、页面组合
-  client/workbench-types.ts   Slot 派生 props 和注入类型
-  client/shell/               tab 定义、标题、导航、流程入口
-  client/project/             项目信息与材料表单
-  client/models/              模型选择和只读预览
-  client/runs/                运行卡片、产物、授权和运行查找
+  client/app/Workbench.tsx        工作区视图读取、命令协调、页面组合
+  client/app/workbench-types.ts   Slot 派生 props 和注入类型
+  client/components/               tab 定义、标题、导航、流程入口
+  client/features/project/             项目信息与材料表单
+  client/features/models/              模型选择和只读预览
+  client/features/runs/                运行卡片、产物、授权和运行查找
   client/state/               数据投影、视图 store、草稿保护
   client/i18n/                typed locale
   client/styles/              CSS Modules

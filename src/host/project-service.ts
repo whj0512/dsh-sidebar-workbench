@@ -1,10 +1,11 @@
 /** Host-owned project identities. One serialized mutation chain protects both directions of each binding. */
 import { randomUUID } from 'node:crypto'
-import { access, lstat, mkdir, open, readFile, readdir, realpath, rename } from 'node:fs/promises'
+import { access, lstat, mkdir, open, readFile, readdir, realpath, link, unlink } from 'node:fs/promises'
+import { inspectMaterial, resolveProjectConfig, type ProjectConfig } from './material-inspection.ts'
 import { constants } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
-import { manifestSchema, type ProjectBinding, type ProjectCommand, type ProjectManifest, type ProjectProblem, type ProjectResult } from '../shared/project.ts'
+import { manifestSchema, type ProjectBinding, type ProjectCommand, type ProjectManifest, type ProjectProblem, type ProjectResult, type ProjectResource } from '../shared/project.ts'
 
 /** Persistence is supplied by the Host domain, never by browser storage. */
 export interface BindingRepository {
@@ -43,7 +44,8 @@ export class ProjectService {
   private stopped = false
   /** @param workspaces - Authoritative registry. @param bindings - Plugin domain. */
   constructor(private readonly workspaces: () => readonly RegistryWorkspace[], private readonly bindings: BindingRepository,
-    private readonly unsettled: (projectId: string) => boolean = () => false) {}
+    private readonly unsettled: (projectId: string) => boolean = () => false,
+    private readonly config: ProjectConfig = resolveProjectConfig({})) {}
   /** @param command - Validated wire command. @returns Durable result or structured failure; failed writes never report success. */
   execute(command: ProjectCommand): Promise<ProjectResult> {
     if (this.stopped) return Promise.resolve({ ok: false, problem: 'unavailable' })
@@ -62,33 +64,58 @@ export class ProjectService {
     try { return manifestSchema.parse(JSON.parse(await readFile(await confined(root, '.workbench/project.json'), 'utf8'))) }
     catch (error) { if (absent(error)) return undefined; if (error instanceof ProjectError) throw error; throw new ProjectError('identity') }
   }
-  private async publish(root: string, manifest: ProjectManifest, replacing = false): Promise<void> {
+  private async publish(root: string, manifest: ProjectManifest): Promise<void> {
     const directory = await confined(root, '.workbench', true)
     await mkdir(directory, { recursive: false }).catch((error: unknown) => { if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error })
     await confined(root, '.workbench')
     const destination = await confined(root, '.workbench/project.json', true)
     const temp = join(directory, `${randomUUID()}.tmp`)
     const handle = await open(temp, 'wx')
-    try { await handle.writeFile(`${JSON.stringify(manifest, null, 2)}\n`); await handle.sync() } finally { await handle.close() }
-    // Initialization cannot replace an identity; adoption updates only the same project.
-    const existing = await this.manifest(root)
-    if (existing && (!replacing || existing.projectId !== manifest.projectId)) throw new ProjectError('identity')
-    if (replacing && !existing) throw new ProjectError('identity')
-    await rename(temp, destination)
+    try {
+      try { await handle.writeFile(`${JSON.stringify(manifest, null, 2)}\n`); await handle.sync() } finally { await handle.close() }
+      // Exclusive publication also prevents another Host from replacing this identity.
+      await link(temp, destination)
+    } finally { await unlink(temp) }
   }
-  private async discover(root: string): Promise<NonNullable<ProjectResult['discovered']>> {
-    const paths = ['chunks.json', 'requirement_relations.json', 'testcase/requirement_testcase_map.json']
-    const results: NonNullable<ProjectResult['discovered']> = []
-    for (const path of paths) {
+  private async resources(root: string, project: ProjectManifest): Promise<ProjectResource[]> {
+    const entries: { path: string; kind: ProjectResource['kind'] }[] = project.materials
+      ? [{ path: project.materials.original, kind: 'original' }, { path: project.materials.markdown, kind: 'markdown' }] : []
+    entries.push(...project.artifacts.map(path => ({ path, kind: 'artifact' as const })))
+    const results: ProjectResource[] = []
+    for (const entry of entries) {
       try {
-        const file = await confined(root, path)
-        const info = await lstat(file)
-        if (!info.isFile() || info.size > 1024 * 1024) { results.push({ path, status: 'unsupported', validation: 'not-checked' }); continue }
-        try { JSON.parse(await readFile(file, 'utf8')); results.push({ path, status: 'recognized', validation: 'not-checked' }) }
-        catch (error) { if (!(error instanceof SyntaxError)) throw error; results.push({ path, status: 'unsupported', validation: 'not-checked' }) }
-      } catch (error) { if (!absent(error)) throw error; results.push({ path, status: 'missing', validation: 'not-checked' }) }
+        const current = await inspectMaterial(await confined(root, entry.path), entry.path, entry.kind, this.config)
+        const saved = project.resources?.find(resource => resource.path === entry.path && resource.kind === entry.kind)
+        results.push(saved?.sha256 && current.sha256 && saved.sha256 !== current.sha256 ? { ...current, status: 'changed' } : current)
+      } catch (error) {
+        results.push({ ...entry, checkedAt: new Date().toISOString(), status: error instanceof ProjectError ? 'unsafe' : absent(error) ? 'missing' : 'unreadable' })
+      }
     }
     return results
+  }
+  private async rejectNested(root: string): Promise<void> {
+    for (let parent = dirname(root); parent !== dirname(parent); parent = dirname(parent)) {
+      try { await lstat(join(parent, '.workbench/project.json')); throw new ProjectError('conflict') }
+      catch (error) { if (!absent(error)) throw error }
+    }
+    const queue = [root]
+    let count = 0
+    for (let index = 0; index < queue.length; index++) {
+      const directory = queue[index]!
+      for (const child of await readdir(directory, { withFileTypes: true })) {
+        if (++count > this.config.maxProjectScanEntries) throw new ProjectError('invalid')
+        if (!child.isDirectory() || child.isSymbolicLink()) continue
+        const path = join(directory, child.name)
+        if (child.name === '.workbench') {
+          if (directory !== root) {
+            try { await lstat(join(path, 'project.json')); throw new ProjectError('conflict') }
+            catch (error) { if (!absent(error)) throw error }
+          }
+          continue
+        }
+        queue.push(path)
+      }
+    }
   }
   private async perform(command: ProjectCommand): Promise<ProjectResult> {
     const ws = await this.workspace(command)
@@ -112,29 +139,27 @@ export class ProjectService {
     const projectId = project?.projectId
     const others = projectId ? this.bindings.list().filter(b => b.projectId === projectId && b.workspaceId !== ws.id) : []
     const other = others.at(-1)
-    if (binding && (!project || project.projectId !== binding.projectId || binding.root !== ws.path)) throw new ProjectError('identity')
+    if (binding && (!project || project.projectId !== binding.projectId)) throw new ProjectError('identity')
     if (others.some(b => b.status === 'active')) throw new ProjectError('conflict')
-    if (other && command.action !== 'relink') return { ok: false, problem: 'relink', project, binding: other }
-    if (command.action === 'inspect') return { ok: true, ...(project ? { project } : {}), ...(binding ? { binding } : {}) }
-    if (command.action === 'discover') return { ok: true, discovered: await this.discover(ws.path), ...(project ? { project } : {}) }
+    const previous = binding ? (binding.root !== ws.path || binding.status !== 'active' ? binding : undefined) : other
+    const resources = project ? await this.resources(ws.path, project) : undefined
+    const revision = previous?.revision ?? 0
+    const relink = previous ? { previousWorkspaceId: previous.workspaceId, previousRoot: previous.root, nextWorkspaceId: ws.id,
+      nextRoot: ws.path, revision, unsettled: previous.unsettledRuns.length > 0 || this.unsettled(previous.projectId) } : undefined
+    if (relink && command.action !== 'relink') return { ok: false, problem: 'relink', project, binding: previous, resources, relink }
+    if (command.action === 'inspect') return { ok: true, ...(project ? { project, resources } : {}), ...(binding ? { binding } : {}) }
+    if (project && command.action === 'initialize' && (!project.materials || !command.materials ||
+      project.materials.original !== command.materials.original || project.materials.markdown !== command.materials.markdown ||
+      project.materials.version !== command.materials.version || project.materials.sameVersion !== command.materials.sameVersion)) throw new ProjectError('materials')
+    if (project && command.action === 'initialize' && resources?.some(resource => resource.kind !== 'artifact' && resource.status !== 'valid'))
+      return { ok: false, problem: 'materials', project, binding, resources }
     if (command.action === 'relink') {
-      if (!project || command.expectedProjectId !== project.projectId) throw new ProjectError('identity')
-      if (others.some(b => b.unsettledRuns.length) || binding?.unsettledRuns.length || this.unsettled(project.projectId)) throw new ProjectError('unsettled')
-    }
-    if (project && command.action === 'adopt') {
-      const discovered = await this.discover(ws.path)
-      const artifacts = discovered.filter(a => a.status === 'recognized').map(a => a.path)
-      if (!artifacts.length) throw new ProjectError('materials')
-      project = { ...project, artifacts: [...new Set([...project.artifacts, ...artifacts])] }
-      await this.publish(ws.path, project, true)
+      if (!project || command.expectedProjectId !== project.projectId || !relink || command.expectedRevision !== revision) throw new ProjectError('identity')
+      if (relink.unsettled || others.some(b => b.unsettledRuns.length)) throw new ProjectError('unsettled')
     }
     if (!project) {
       if (command.action === 'relink') throw new ProjectError('identity')
-      // Only direct children are inspected for nested identities; no traversal into other workspaces.
-      for (const child of await readdir(ws.path, { withFileTypes: true })) if (child.isDirectory() && child.name !== '.workbench') {
-        try { await lstat(join(ws.path, child.name, '.workbench', 'project.json')); throw new ProjectError('conflict') }
-        catch (error) { if (!absent(error)) throw error }
-      }
+      await this.rejectNested(ws.path)
       if (command.action === 'initialize') {
         const materials = command.materials
         if (!materials || !/\.(pdf|docx)$/i.test(materials.original) || !/\.md$/i.test(materials.markdown)) throw new ProjectError('materials')
@@ -143,16 +168,17 @@ export class ProjectService {
           catch (error) { if (error instanceof ProjectError) throw error; throw new ProjectError('materials') }
         }
       }
-      const discovered = command.action === 'adopt' ? await this.discover(ws.path) : []
-      if (command.action === 'adopt' && !discovered.some(a => a.status === 'recognized')) throw new ProjectError('materials')
       project = { schema: 1, projectId: randomUUID(), baseline: null, materials: command.materials ?? null,
-        artifacts: discovered.filter(a => a.status === 'recognized').map(a => a.path), createdAt: new Date().toISOString(), validation: 'not-checked' }
+        artifacts: [], createdAt: new Date().toISOString(), validation: 'not-checked' }
+      project.resources = await this.resources(ws.path, project)
+      if (project.resources.some(resource => resource.status !== 'valid')) return { ok: false, problem: 'materials', resources: project.resources }
+      await this.workspace(command)
       await this.publish(ws.path, project)
     }
     await this.workspace(command)
-    binding = { workspaceId: ws.id, projectId: project.projectId, revision: binding?.revision ?? Math.max(0, ...others.map(b => b.revision)) + 1, root: ws.path, status: 'active', unsettledRuns: [] }
+    binding = { workspaceId: ws.id, projectId: project.projectId, revision: command.action === 'relink' ? revision + 1 : binding?.revision ?? Math.max(0, ...others.map(b => b.revision)) + 1, root: ws.path, status: 'active', unsettledRuns: [] }
     await this.bindings.put(binding)
-    return { ok: true, project, binding }
+    return { ok: true, project, binding, resources: await this.resources(ws.path, project) }
   }
   /** @returns Settlement of accepted operations; new requests are refused immediately. */
   async close(): Promise<void> { this.stopped = true; await this.tail }

@@ -2,6 +2,7 @@
 import { strict as assert } from 'node:assert'
 import { mkdir, writeFile, mkdtemp } from 'node:fs/promises'
 import { resolve, basename } from 'node:path'
+import { PDFDocument } from 'pdf-lib'
 
 import { dismissStartup, launchBrowser, setLanguage } from './browser-harness.mjs'
 const target = process.env.DSH_TEST_URL
@@ -24,7 +25,8 @@ try {
   for (const copy of copies) {
     const fixtureRoot = await mkdtemp(resolve(output, 'workbench-ui-'));
     const fixtureName = basename(fixtureRoot);
-    await writeFile(resolve(fixtureRoot, 'source.pdf'), 'fixture only; not parsed');
+    const document = await PDFDocument.create(); document.addPage();
+    await writeFile(resolve(fixtureRoot, 'source.pdf'), await document.save());
     await writeFile(resolve(fixtureRoot, 'source.md'), '# Fixture');
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: copy.locale })
     const page = await context.newPage()

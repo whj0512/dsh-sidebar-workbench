@@ -42,12 +42,12 @@ pnpm dsh --profile sidebar-workbench-dev --port 3081
 dsh-sidebar-workbench/
   src/index.ts                 Host 发现入口
   src/client/index.ts          注册与清理
-  src/client/Workbench.tsx     工作台页面协调
-  src/client/workbench-types.ts Slot 注入类型
-  src/client/shell/            tab 定义、标题、导航与流程入口
-  src/client/project/          项目信息与材料初始化表单
-  src/client/models/           模型选择与预览
-  src/client/runs/             运行、授权与产物展示
+  src/client/app/Workbench.tsx     工作台页面协调
+  src/client/app/workbench-types.ts Slot 注入类型
+  src/client/components/            tab 定义、标题、导航与流程入口
+  src/client/features/project/          项目信息与材料初始化表单
+  src/client/features/models/           模型选择与预览
+  src/client/features/runs/             运行、授权与产物展示
   src/client/state/            数据投影、视图状态与草稿保护
   src/client/i18n/             typed locale 中英文文案
   src/client/styles/           工作台 CSS Modules
@@ -139,6 +139,12 @@ pnpm dsh plugin --profile sidebar-workbench-dev remove dsh-plugin-sidebar-workbe
 
 ## React 组件结构
 
-`Workbench.tsx` 负责 Slot 数据接入、工作区视图选择和命令协调；各功能按 `shell`、`project`、`models`、`runs` 分组，数据和视图状态集中在 `state`。Slot 注入类型集中在 `workbench-types.ts`。逐文件职责、阅读顺序和修改位置见 [Client 代码导航](src/client/README.md)。
+`Workbench.tsx` 负责 Slot 数据接入、工作区视图选择和命令协调；各功能按 `components` 和 `features` 分组，数据和视图状态集中在 `state`。Slot 注入类型集中在 `app/workbench-types.ts`。逐文件职责、阅读顺序和修改位置见 [Client 代码导航](src/client/README.md)。
 
 展示组件通过 props 接收数据，使用稳定回调与 `memo` 隔离无关草稿输入。产物列表和待授权运行只在对应页面中派生；草稿离开保护仅在草稿是否为空发生变化时更新。状态仍由原有 Slot store 和 WorkbenchData 持有，未改变状态字段、存储方式或执行授权。检查结果与人工核验步骤见 [React 结构优化记录](docs/React结构优化记录.md)。
+
+## 阶段 3 项目准备
+
+P00 支持真实 PDF/DOCX 与 Markdown 的基本结构检查、材料版本登记、SHA-256 资源快照、显式重新关联及部分绑定失败恢复。P01 显示真实项目与资源摘要；文件链接交给宿主预览。已有成果识别/采用入口已移除，后续业务执行仍未接入。完整范围、兼容说明和人工核验见[阶段 3 报告](docs/阶段验收/阶段03-P00.md)与[能力核验清单](docs/阶段验收/阶段03-能力核验清单.md)。
+
+插件 config 支持正整数 `maxMaterialBytes`（默认 67108864）、`maxDocumentXmlBytes`（默认 16777216）和 `maxProjectScanEntries`（默认 100000）。超过限制会拒绝相关检查或初始化；配置错误在启动时报错。新增生产依赖安装后需重新构建、重启 Host 并刷新 Client。新清单包含可选 resources 字段，新版可读旧清单，旧版降级读取不保证兼容；不得自动改写已有空材料项目。

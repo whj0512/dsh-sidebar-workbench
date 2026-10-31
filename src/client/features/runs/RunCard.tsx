@@ -2,10 +2,10 @@
 import { memo } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { Page } from '../state/view-store.ts'
-import css from '../styles/Workbench.module.css'
-import type { Run } from '../../shared/workflow.ts'
-import type { WorkbenchInjected } from '../workbench-types.ts'
+import type { Page } from '../../state/view-store.ts'
+import css from '../../styles/Workbench.module.css'
+import type { Run } from '../../../shared/workflow.ts'
+import type { WorkbenchInjected } from '../../app/workbench-types.ts'
 
 /** @param props - One immutable run and its explicit actions. @returns Run details. */
 export const RunCard = memo(function RunCard({ run: r, t, act, go }: { run: Run; t: TranslateNS<'sidebarWorkbench'>; act: WorkbenchInjected['act']; go: (page: Page) => void }) {

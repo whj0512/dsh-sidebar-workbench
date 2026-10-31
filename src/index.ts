@@ -6,6 +6,7 @@ import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import { bindingSchema, commandSchema, type ProjectCommand, type ProjectResult } from './shared/project.ts'
 import { remoteContribution } from './shared/remote.ts'
+import { resolveProjectConfig } from './host/material-inspection.ts'
 import { ProjectService } from './host/project-service.ts'
 import { RunService, durableRunSchema } from './host/run-service.ts'
 import { ProjectError, confined } from './host/project-service.ts'
@@ -24,8 +25,9 @@ class WorkbenchProjects extends TypertRemoteService {
   }
 }
 
-/** @param ctx - Host services; all contributions and storage handles belong to this fiber. */
-export async function apply(ctx: Context): Promise<void> {
+/** @param ctx - Host services; all contributions and storage handles belong to this fiber. @param config - Optional validated material and directory scan limits. */
+export async function apply(ctx: Context, config?: unknown): Promise<void> {
+  const limits = resolveProjectConfig(config)
   const domain = await ctx.storageDomain.open({ name: 'sidebar_workbench', version: 1, tables: { bindings: { valueSchema: bindingSchema }, runs: { valueSchema: durableRunSchema } } })
   ctx.effect(() => () => domain.close(), 'workbench: storage lifetime')
   const table = domain.table('bindings')
@@ -40,7 +42,7 @@ export async function apply(ctx: Context): Promise<void> {
   await runs.recover()
   const projects = new ProjectService(() => ctx.workspaceRegistry.list(), {
     list: () => [...table.entries()].map(([, value]) => value), put: binding => table.put(binding.workspaceId, binding),
-  }, id => runs.unsettled(id).length > 0)
+  }, id => runs.unsettled(id).length > 0, limits)
   ctx.effect(() => () => projects.close(), 'workbench: project lifetime')
   ctx.effect(() => ctx.typert.register({ package: remoteContribution.package, face: 'host', schemas: [],
     model: { services: [], events: [], objects: [] }, invocations: remoteContribution.descriptors,

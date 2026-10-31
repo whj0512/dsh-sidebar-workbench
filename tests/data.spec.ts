@@ -1,6 +1,6 @@
 // @vitest-environment node
 /** Workspace membership and delayed responses are tested without UI scheduling. */
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkbenchData, workspaceFor } from '../src/client/state/data.ts'
@@ -25,5 +25,25 @@ it('A21/A23 ignores cwd prefixes and keeps delayed project results with the init
   list.set({ ...list.getSnapshot(), items: [workspace('b', 's2')] })
   expect(data.source('s1').getSnapshot().phase).toBe('removed')
   expect(data.executor.get(r.id).request.binding.root).toBe('demo:/a')
+  data.dispose()
+})
+
+it('hides cached facts and ignores late failures when the same workspace moves', async () => {
+  const list = createSnapshotStore<WorkspaceSnapshot>({ phase: 'ready', state: 'idle', error: null, items: [workspace('a', 's1')], pinnedSessionIds: [], archivedSessionIds: [] })
+  let reject!: (reason: Error) => void
+  const remote = vi.fn<() => Promise<ProjectResult>>().mockResolvedValueOnce({ ok: true })
+    .mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
+    .mockResolvedValueOnce({ ok: false, problem: 'relink' })
+  const data = new WorkbenchData({ list }, remote)
+  await data.project('s1', 'inspect')
+  expect(data.source('s1').getSnapshot().projectResult?.ok).toBe(true)
+  const pending = data.project('s1', 'inspect')
+  list.set({ ...list.getSnapshot(), items: [{ ...workspace('a', 's1'), path: '/moved/a' }] })
+  expect(data.source('s1').getSnapshot().projectResult).toBeUndefined()
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try { reject(new Error('old request')); await pending } finally { warning.mockRestore() }
+  expect(data.source('s1').getSnapshot().projectResult).toBeUndefined()
+  await data.project('s1', 'inspect')
+  expect(data.source('s1').getSnapshot().projectResult?.problem).toBe('relink')
   data.dispose()
 })

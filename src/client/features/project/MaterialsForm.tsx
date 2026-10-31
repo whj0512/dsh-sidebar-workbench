@@ -2,11 +2,11 @@
 import { memo, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ProjectProblem } from '../../shared/project.ts'
-import type { View } from '../state/view-store.ts'
+import type { ProjectProblem } from '../../../shared/project.ts'
+import type { View } from '../../state/view-store.ts'
 import { MaterialPathInput } from './MaterialPathInput.tsx'
-import type { WorkbenchInjected } from '../workbench-types.ts'
-import css from '../styles/Workbench.module.css'
+import type { WorkbenchInjected } from '../../app/workbench-types.ts'
+import css from '../../styles/Workbench.module.css'
 
 type Fields = Pick<View, 'original' | 'markdown' | 'version' | 'sameVersion'>
 type Field = keyof Fields
@@ -14,7 +14,8 @@ type ErrorKey = 'originalRequired' | 'markdownRequired' | 'versionRequired' | 's
 const relativePath = (path: string): boolean => !/^(?:[\\/]|[a-z]:)/i.test(path) && !path.split(/[\\/]/).some(p => !p || p === '.' || p === '..')
 
 /** @param props - Existing view fields and commands; validation does not rewrite their values. @returns Accessible initialization form. */
-export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, initialize, unavailable, loading, problem, listFiles }: {
+export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, initialize, unavailable, loading, problem, listFiles, openFile }: {
+  openFile?: (path: string) => void
   listFiles?: WorkbenchInjected['listFiles']
   t: TranslateNS<'sidebarWorkbench'>; fields: Fields; change: (patch: Partial<Fields>) => void
   initialize: () => void; unavailable: boolean; loading: boolean; problem: ProjectProblem | undefined
@@ -68,9 +69,12 @@ export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, in
   const a11y = (field: Field) => ({ 'aria-invalid': !!errors[field], 'aria-describedby': errors[field] ? `${uid}-${field}-error` : undefined })
   return (
     <form noValidate onSubmit={submit} aria-busy={loading}>
-      <label>
-        {t('original')}
+      <div>
+        <label htmlFor={`${uid}-original`}>{t('original')}</label>
         <MaterialPathInput
+          id={`${uid}-original`}
+          openFile={openFile}
+          previewFailedLabel={t('filePreviewFailed')}
           listFiles={listFiles}
           extension={/\.(pdf|docx)$/i}
           emptyLabel={t('fileEmpty')}
@@ -86,10 +90,13 @@ export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, in
           onChange={value => edit('original', { original: value })}
         />
         {hint('original')}
-      </label>
-      <label>
-        {t('markdown')}
+      </div>
+      <div>
+        <label htmlFor={`${uid}-markdown`}>{t('markdown')}</label>
         <MaterialPathInput
+          id={`${uid}-markdown`}
+          openFile={openFile}
+          previewFailedLabel={t('filePreviewFailed')}
           listFiles={listFiles}
           extension={/\.md$/i}
           emptyLabel={t('fileEmpty')}
@@ -105,7 +112,7 @@ export const MaterialsForm = memo(function MaterialsForm({ t, fields, change, in
           onChange={value => edit('markdown', { markdown: value })}
         />
         {hint('markdown')}
-      </label>
+      </div>
       <label>
         {t('version')}
         <Input
