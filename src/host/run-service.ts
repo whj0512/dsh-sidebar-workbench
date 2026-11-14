@@ -44,7 +44,13 @@ export class RunService {
     if (this.stopped) return Promise.reject(new Error('Run service closed'))
     return this.serial(async () => {
       const old = this.records.list().find(r => r.projectId === request.binding.projectId && r.requestKey === request.requestKey)
-      if (old) return old
+      if (old) {
+        await this.check(request.binding)
+        if (old.workspaceId !== request.binding.workspaceId || old.bindingRevision !== request.binding.revision
+          || old.root !== request.binding.root || old.inputVersion !== request.inputVersion || old.fingerprint !== request.fingerprint
+          || old.operation !== request.operation || JSON.stringify(old.scope) !== JSON.stringify(request.scope)) throw new Error('Idempotency input conflict')
+        return old
+      }
       if (!this.supports(request.operation)) throw new Error('Executor unavailable')
       await this.check(request.binding)
       const id = randomUUID()

@@ -16,14 +16,15 @@ import { ProjectPanel } from '../features/project/ProjectPanel.tsx'
 import { ProjectSummary } from '../features/project/ProjectSummary.tsx'
 import { WorkflowOverview } from '../components/WorkflowOverview.tsx'
 import { RunHistory, ArtifactList, RemoteConfirmation } from '../features/runs/RunViews.tsx'
+import { ItemizationPanel } from '../features/project/ItemizationPanel.tsx'
 const EMPTY_RUNS: readonly Run[] = []
 
 /** @param props - Framework-bound hooks, view state and commands. @returns Workspace-following workbench. */
-export function Workbench({ t, sessionId, tab, data, useStore, actions, start, act, project, draftChanged, listFiles }: WorkbenchProps): ReactNode {
+export function Workbench({ t, sessionId, tab, data, useStore, actions, start, act, project, draftChanged, listFiles, itemization }: WorkbenchProps): ReactNode {
   const bucket = `${sessionId}:${tab.id}:${data.workspace?.workspaceId ?? 'unbound'}`
   const view = useStore(s => s.views[bucket] ?? initialView)
   const change = useCallback((patch: Partial<View>) => actions.change(bucket, patch), [actions, bucket])
-  const hasDraft = view.draft.length > 0
+  const hasDraft = view.draft.length > 0 || view.itemizationFeedback.length > 0
   useEffect(() => { draftChanged(bucket, hasDraft, tab.signal) }, [draftChanged, bucket, hasDraft, tab.signal])
   const go = useCallback((page: Page) => change({ page }), [change])
   const selectModel = useCallback((model: string) => change({ model }), [change])
@@ -63,9 +64,14 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
   const candidate = useMemo(() => view.page === 'review' ? latestRun(data.runs, r => r.request.operation === 'itemize' || r.request.operation === 'update') : undefined, [view.page, data.runs])
   const activeRuns = view.demo ? data.runs : EMPTY_RUNS
   return (
-    <section className={css.root} aria-label={t('title')}>
+    <section
+      className={css.root}
+      aria-label={t('title')}
+    >
       {view.draft.length > 0 && (
-        <p className={css.draftNotice}>{t('unsavedDraft')}</p>
+        <p className={css.draftNotice}>
+          {t('unsavedDraft')}
+        </p>
       )}
       <WorkbenchChrome
         t={t}
@@ -105,27 +111,70 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             go={go}
           />
         )}
-        {!view.demo && ['flow', 'settings', 'artifacts'].includes(view.page) && data.projectResult && (data.projectResult.project || data.projectResult.resources) &&
-          <ProjectSummary t={t} result={data.projectResult} openFile={openMaterial} unavailable={data.phase !== 'ready' || !data.projectResult.ok} />}
+        {!view.demo && ['flow', 'settings', 'artifacts'].includes(view.page) && data.projectResult && (data.projectResult.project || data.projectResult.resources) && (
+          <ProjectSummary
+            t={t}
+            result={data.projectResult}
+            openFile={openMaterial}
+            unavailable={data.phase !== 'ready' || !data.projectResult.ok}
+          />
+        )}
         {view.page === 'flow' && (
-          <WorkflowOverview t={t} go={go} />
+          <WorkflowOverview
+            t={t}
+            go={go}
+          />
+        )}
+        {!view.demo && view.page === 'review' && (
+          <h2>
+            {t('review')}
+          </h2>
+        )}
+        {!view.demo && view.page === 'run' && (
+          <h2>
+            {t('run')}
+          </h2>
+        )}
+        {!view.demo && view.page === 'artifacts' && (
+          <h2>
+            {t('artifacts')}
+          </h2>
+        )}
+        {!view.demo && data.projectResult?.project && ['flow', 'review', 'run', 'artifacts'].includes(view.page) && (
+          <ItemizationPanel
+            key={bucket}
+            t={t}
+            remote={itemization}
+            unavailable={data.phase !== 'ready' || !data.projectResult.ok}
+            fields={materialFields}
+            change={change}
+            feedback={view.itemizationFeedback}
+            listFiles={listFiles}
+            openFile={openMaterial}
+          />
         )}
         {view.page === 'settings' && (
           <>
-            <h2>{t('settings')}</h2>
-            <p>{t('materialHelp')}</p>
-            {!data.projectResult?.project && <MaterialsForm
-              key={bucket}
-              t={t}
-              listFiles={listFiles}
-              openFile={openMaterial}
-              fields={materialFields}
-              change={change}
-              unavailable={view.demo || data.phase !== 'ready'}
-              loading={data.projectLoading}
-              problem={data.projectResult?.problem}
-              initialize={initialize}
-            />}
+            <h2>
+              {t('settings')}
+            </h2>
+            <p>
+              {t('materialHelp')}
+            </p>
+            {!data.projectResult?.project && (
+              <MaterialsForm
+                key={bucket}
+                t={t}
+                listFiles={listFiles}
+                openFile={openMaterial}
+                fields={materialFields}
+                change={change}
+                unavailable={view.demo || data.phase !== 'ready'}
+                loading={data.projectLoading}
+                problem={data.projectResult?.problem}
+                initialize={initialize}
+              />
+            )}
             <label>
               {t('draft')}
               <textarea
@@ -135,28 +184,52 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             </label>
           </>
         )}
-        {view.page === 'review' && (
+        {view.page === 'review' && view.demo && (
           <>
-            <h2>{t('review')}</h2>
+            <h2>
+              {t('review')}
+            </h2>
             <div className={css.actions}>
               {command('itemize')}
               {command('update')}
             </div>
             {view.demo && (
               <>
-                <h3>{t('overview')}</h3>
-                <p>{t('sampleOverview')}</p>
-                <h3>{t('source')}</h3>
-                <p>{t('sampleSource')}</p>
-                <h3>{t('seed')}</h3>
-                <p>{t('sampleRelation')}</p>
+                <h3>
+                  {t('overview')}
+                </h3>
+                <p>
+                  {t('sampleOverview')}
+                </p>
+                <h3>
+                  {t('source')}
+                </h3>
+                <p>
+                  {t('sampleSource')}
+                </p>
+                <h3>
+                  {t('seed')}
+                </h3>
+                <p>
+                  {t('sampleRelation')}
+                </p>
                 <details>
-                  <summary>{t('differences')}</summary>
-                  <p>{t('differenceDetail')}</p>
-                  <p>{t('history')}</p>
+                  <summary>
+                    {t('differences')}
+                  </summary>
+                  <p>
+                    {t('differenceDetail')}
+                  </p>
+                  <p>
+                    {t('history')}
+                  </p>
                 </details>
-                <p>{t(data.adopted ? 'accepted' : 'baselinePending')}</p>
-                <p>{t('reviewPending')}</p>
+                <p>
+                  {t(data.adopted ? 'accepted' : 'baselinePending')}
+                </p>
+                <p>
+                  {t('reviewPending')}
+                </p>
                 <Button
                   className={css.primaryButton}
                   variant="primary"
@@ -183,7 +256,9 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
         )}
         {view.page === 'features' && (
           <>
-            <h2>{t('features')}</h2>
+            <h2>
+              {t('features')}
+            </h2>
             <label>
               {t('search')}
               <Input
@@ -196,7 +271,10 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
               ['OnePedal', 'BrakeHold']
                 .filter(f => f.toLowerCase().includes(view.search.toLowerCase()))
                 .map(f => (
-                  <label className={css.row} key={f}>
+                  <label
+                    className={css.row}
+                    key={f}
+                  >
                     <input
                       type="checkbox"
                       checked={view.selected.includes(f)}
@@ -209,10 +287,15 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
                       }
                     />
                     {f}
-                    <span>§3.2.1 · {data.baseline}</span>
+                    <span>
+                      {'§3.2.1 · '}
+                      {data.baseline}
+                    </span>
                   </label>
                 ))}
-            <p>{t('partial')}</p>
+            <p>
+              {t('partial')}
+            </p>
             <div className={css.actions}>
               {command('model')}
               {command('relations')}
@@ -242,10 +325,16 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
         )}
         {view.page === 'tests' && (
           <>
-            <h2>{t('tests')}</h2>
-            <p>{t('coverageUnknown')}</p>
+            <h2>
+              {t('tests')}
+            </h2>
+            <p>
+              {t('coverageUnknown')}
+            </p>
             {view.demo && (
-              <p>{t('coverage')}</p>
+              <p>
+                {t('coverage')}
+              </p>
             )}
             {command('tests')}
             <Button
@@ -259,8 +348,12 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
         )}
         {view.page === 'graph' && (
           <>
-            <h2>{t('graph')}</h2>
-            <p>{t('graphSource')}</p>
+            <h2>
+              {t('graph')}
+            </h2>
+            <p>
+              {t('graphSource')}
+            </p>
             <div className={css.actions}>
               {command('ttl')}
               {command('upload')}
@@ -269,25 +362,48 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             </div>
             {view.demo && (
               <>
-                <p>{t('sampleRelation')}</p>
+                <p>
+                  {t('sampleRelation')}
+                </p>
                 <details>
-                  <summary>{t('source')}</summary>
-                  <p>{t('graphEvidence')}</p>
-                  <p>{t('confidence')}</p>
-                  <p>{t('graphInferred')}</p>
+                  <summary>
+                    {t('source')}
+                  </summary>
+                  <p>
+                    {t('graphEvidence')}
+                  </p>
+                  <p>
+                    {t('confidence')}
+                  </p>
+                  <p>
+                    {t('graphInferred')}
+                  </p>
                 </details>
               </>
             )}
           </>
         )}
         {view.page === 'confirm' && (
-          <RemoteConfirmation runs={activeRuns} t={t} act={act} go={go} />
+          <RemoteConfirmation
+            runs={activeRuns}
+            t={t}
+            act={act}
+            go={go}
+          />
         )}
-        {view.page === 'run' && (
-          <RunHistory runs={activeRuns} t={t} act={act} go={go} />
+        {view.page === 'run' && view.demo && (
+          <RunHistory
+            runs={activeRuns}
+            t={t}
+            act={act}
+            go={go}
+          />
         )}
-        {view.page === 'artifacts' && (
-          <ArtifactList runs={activeRuns} t={t} />
+        {view.page === 'artifacts' && view.demo && (
+          <ArtifactList
+            runs={activeRuns}
+            t={t}
+          />
         )}
         {view.demo && (
           <label>
@@ -309,7 +425,10 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
                   'failure',
                 ] as const
               ).map(s => (
-                <option key={s} value={s}>
+                <option
+                  key={s}
+                  value={s}
+                >
                   {t(s)}
                 </option>
               ))}

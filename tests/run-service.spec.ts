@@ -12,6 +12,7 @@ it('A13/A16/A18 persists idempotent ownership, refuses missing executors, and re
   capable = true
   const [a, b] = await Promise.all([first.start(admission), first.start(admission)])
   expect(a.id).toBe(b.id)
+  await expect(first.start({ ...admission, fingerprint: 'changed' })).rejects.toThrow('Idempotency input conflict')
   await first.update(a.id, a.sequence, { state: 'running', validation: 'not-checked', committed: false, artifacts: [] })
   const restart = new RunService(repository, async () => {}, () => false)
   await restart.recover()

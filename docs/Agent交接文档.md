@@ -1,11 +1,11 @@
 # dsh-sidebar-workbench Agent 交接文档
 
-接续状态更新于 2026-10-29（Asia/Hong_Kong）。先阅读[分阶段实施计划](剩余任务分阶段实施计划.md)：阶段 1–2 已通过人工审核，后续按页面交付真实业务；新阶段 3 尚未启动。本文件保留早期交接的代码与环境线索，第 3、5–7 节为阶段 2 前的核对快照，使用前复核；最新 UI 修复和实际验证见[阶段 2 报告](阶段验收/阶段02-T01.md)。本次仅更新计划相关指引，没有重跑业务验证。
+接续状态更新于 2026-11-14（Asia/Hong_Kong）。阶段 1–3 已通过人工审核。用户已确认阶段 4 主功能「条目化文档」完成，本轮归档了 V1 运行及产物。阶段 4 整体审核等待候选业务结论和 V2 比较，阶段 5 等待正式基线与用户放行。 [分阶段实施计划](剩余任务分阶段实施计划.md) · [阶段 4 验收记录](阶段验收/阶段04-P01-P02-P04.md)
 
 ## 1. 首先遵守的用户约束
 
 - 修改范围限于 `E:/dsh-sidebar-workbench`。`E:/deepseek-harness` 只用于公共 API 核对和运行验证；不要直接修改 agent-loop 或内部 dockkit。发现公共扩展点缺口时，提交源码证据和最小扩展建议。
-- 按分阶段计划中的页面顺序推进，每阶段须完成页面、真实业务调用及产物核验，再等待用户人工审核。阶段 1–2 已通过；本次改计划不启动阶段 3。原 T00–T05 保留为分类，不再按技术层顺序执行。
+- 按分阶段计划中的页面顺序推进，每阶段完成页面、真实业务调用及产物核验后交付用户审核。原 T00–T05 保留为历史任务分类。
 - 一个 DSH Workspace 对应一个建模项目。通过当前 Session 的工作区成员关系查找 `Workspace.path`；复用宿主工作区管理，不创建项目选择器或任意输出根目录。
 - 已启动任务应固定工作区、项目、绑定修订号及目录快照；切换 Session 或 cd 不得改变任务目录。改名、移除、目录丢失、重新关联均须按验收矩阵核验，不能仅凭类型字段认定完成。
 - 保留 tab id `dsh-plugin-sidebar-workbench`、kind `sidebar-workbench` 和现有插件安装方式。使用 DSH Slot、typed locale、CSS Modules 及公开 UI primitives。
@@ -36,7 +36,7 @@
 
 ## 4. 阶段状态：代码产出不等于人工验收
 
-阶段 1 的 API 基线与阶段 2 的 UI/生命周期交付均已有用户明确通过记录；真实业务、完整恢复和资源验收仍须按新计划逐项完成。当前状态及新旧任务映射见[计划](剩余任务分阶段实施计划.md#7-审核状态)，各页面缺口见[验收证据索引](阶段验收/验收证据索引.md)。
+阶段状态和新旧任务映射由实施计划维护。验收索引记录具体页面、场景和证据。 [实施计划](剩余任务分阶段实施计划.md#7-审核状态) · [验收证据索引](阶段验收/验收证据索引.md)
 
 后续 Agent 应区分源码、模拟测试、真实 Host 和真实业务证据；没有明确人工通过记录时不得补写已验收。既有 UI 审核不代表 S01–S10 或 A01–A28 全部通过。
 
@@ -68,7 +68,9 @@ src/
 
 项目命令链路：`WorkbenchData.project` → `ctx.remote.workbench.command` → Host `WorkbenchProjects.command` → `ProjectService.execute`。Host 对调用者做 owner 检查，非 owner 当前返回 permission；材料/目录操作由项目服务核验。项目清单位于工作区 `.workbench/project.json`，绑定与运行表存于 `sidebar_workbench` storage domain（version 1）。不要手动删除或重置这些数据。
 
-运行链路仍是 demo：`WorkbenchData.start/act` → 内存 `DemoExecutor` → 页面快照。Host 入口另行创建 RunService 并执行 recover，但能力检查传入 `() => false`；当前没有公开生产运行启动通道供 Client 使用。Client 的 runs 来自 demo executor，不能把 Host 台账存在解释为页面已恢复真实任务。
+真实条目化由 `ItemizationPanel` 调用 `workbench/itemization`，Host 的 `ItemizationService` 管理运行、候选审核和状态恢复。`DshItemizerRuntime` 从执行 preset 的 DSH 注册表读取用户注册的技能。运行存于 Host 的 `itemizations` 表，候选与正式基线存于工作区的 `.workbench/itemization/`，产物位于 `workbench-runs/<runId>/`。 [运行服务](../src/host/itemization-service.ts) · [部署与验证](阶段04-原始技能接入与验证交接.md)
+
+演示模式的 `WorkbenchData.start/act` 使用内存 `DemoExecutor`。其他流水线的真实接入按各自阶段继续。
 
 视图按 `${tab.id}:${workspaceId ?? 'unbound'}` 分桶，结合 Session scope 的 Slot store 保留页面选择、表单和草稿；无持久化草稿保证。DraftGuard 维护非空草稿的 beforeunload 监听，关闭侧栏不自动清空，浏览器原生提示仍依赖浏览器支持和用户激活。
 
@@ -114,8 +116,8 @@ pnpm run test:artifact
 
 `pnpm run test:browser` 不是只读脚本：当前源码会调用 workspace/create、创建会话并进行初始化。运行前检查脚本、选择隔离验证目录/profile，避免将其直接指向用户正在使用的真实项目。不要把执行成功等同于真实业务算法通过。
 
-阶段 2 已通过，无需重复请求其整体审核。后续仅在用户明确启动新阶段 3 后实施 P00 项目与材料准备；共享 Host、恢复和资源能力随首次需要的页面交付，最终在阶段 10 联合验收。改动影响已验收行为时补做对应回归。
+阶段 4 接续时，先补真实 V2 材料和可采用的上一版比较基线，按验收记录核对版本比较、采用与旧版访问。用户放行后从正式基线接入阶段 5 的单功能解析和 DSL 建模。 [接续步骤](阶段验收/阶段04-P01-P02-P04.md#v2-到位后的验收步骤)
 
-待接入能力包括：真实业务执行适配器、真实任务与 Client 快照连接、资源预览/下载的验证路径、完整重连恢复和授权策略。现有 owner-only 项目命令与 demo 授权不能替代正式资源授权设计。
+阶段 5–10 的真实建模、测试和图谱业务按实施计划接入。远端资源授权随对应业务阶段验证。 [各阶段要求](剩余任务分阶段实施计划.md#4-各阶段实施要求)
 
 维护提醒：根 README 部分段落仍残留旧计数器介绍、小体积和无业务持久化等早期措辞，不能当作当前事实；本交接没有扩大范围重写这些内容。目录迁移后 tsc 可能保留旧路径声明产物，正式打包前检查 lib/types 是否有遗留文件，再作限定范围清理。

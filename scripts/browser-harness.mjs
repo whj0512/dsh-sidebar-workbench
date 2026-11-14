@@ -36,6 +36,8 @@ export async function setLanguage(page, language) {
   await page.getByRole('button', { name: /^(账号菜单|Account menu)$/ }).click()
   await page.getByRole('menuitem', { name: /^(设置|Settings)$/ }).click()
   const dialog = page.getByRole('dialog', { name: /^(设置|Settings)$/ })
+  const general = dialog.getByText(/^(通用设置|General)$/, { exact: true })
+  if (await general.isVisible()) await general.click()
   await dialog.getByRole('button', { name: /^(中文|English)$/ }).click()
   await page.getByRole('menuitem', { name: language, exact: true }).click()
   await dialog.getByRole('button', { name: /^(关闭|Close)$/ }).click()

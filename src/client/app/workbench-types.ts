@@ -4,11 +4,13 @@ import type { WorkbenchData } from '../state/data.ts'
 import type { ViewStore } from '../state/view-store.ts'
 import type { Operation, Scenario } from '../../shared/workflow.ts'
 import type { ProjectCommand } from '../../shared/project.ts'
+import type { ItemizationCommand, ItemizationResult } from '../../shared/itemization-api.ts'
 import type {} from '../i18n/locales.ts'
 import type { DataSnapshot } from '../state/data.ts'
 import type { SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 /** Bound once per Session by the Slot registration. */
 export interface WorkbenchInjected {
+  itemization?: (request: Omit<ItemizationCommand, 'sessionId' | 'workspaceId'>) => Promise<ItemizationResult>
   listFiles?: (query: string) => Promise<NonNullable<import('../../shared/project.ts').ProjectResult['files']>>
   sessionId: string
   draftChanged: (key: string, dirty: boolean, signal: AbortSignal) => void

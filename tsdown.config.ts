@@ -34,7 +34,7 @@ export default defineConfig([
       if (!file.replaceAll('\\', '/').endsWith('/src/index.ts')) return null
       return ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
     } } }],
-    deps: { neverBundle: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-typert-protocol', 'zod'] }, outputOptions: { entryFileNames: 'index.js' } },
+    deps: { neverBundle: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-typert-protocol', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-skill', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tools/pipeline', 'zod'] }, outputOptions: { entryFileNames: 'index.js' } },
   {
     entry: { client: 'src/client/index.ts' }, outDir: 'lib', format: 'cjs', platform: 'browser', clean: false,
     dts: false, sourcemap: false, minify: true, target: 'es2022', plugins: [cssModules],

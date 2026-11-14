@@ -1,0 +1,13 @@
+# Explicit test-only overlay: never install into a daily profile.
+- insert:
+    - id: workbench-itemization-fixture-provider
+      name: 'E:/dsh-sidebar-workbench/tests/fixtures/itemizer-provider.mjs'
+- id: agent-default-model
+  config:
+    provider: workbench-itemization-fixture
+    model: fixture
+- id: sidebar-workbench
+  config:
+    itemization:
+      executionPreset: standard
+      shellToolName: !!js "process.platform === 'win32' ? 'pwsh' : 'bash'"

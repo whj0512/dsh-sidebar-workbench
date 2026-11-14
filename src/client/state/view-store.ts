@@ -8,6 +8,7 @@ export interface View {
   feature: string
   selected: string[]
   draft: string
+  itemizationFeedback: string
   search: string
   scenario: 'success' | 'alignment' | 'missing' | 'unknown' | 'submitted' | 'empty' | 'failure'
   operation: 'upload' | 'infer'
@@ -17,7 +18,7 @@ export interface View {
   version: string
   sameVersion: boolean
 }
-export const initialView: View = { page: 'flow', demo: false, feature: 'OnePedal', selected: ['OnePedal'], draft: '', search: '', scenario: 'success', operation: 'upload', model: 'Environment', original: '', markdown: '', version: '', sameVersion: false }
+export const initialView: View = { page: 'flow', demo: false, feature: 'OnePedal', selected: ['OnePedal'], draft: '', itemizationFeedback: '', search: '', scenario: 'success', operation: 'upload', model: 'Environment', original: '', markdown: '', version: '', sameVersion: false }
 
 /** @returns Root-scoped state with a separate bucket for each Session/tab/workspace tuple. */
 export function createViewStore() {

@@ -32,7 +32,6 @@ try {
     const page = await context.newPage()
     page.setDefaultTimeout(7000)
     const errors = []
-    page.on('response',async response=>{if(response.url().includes('/api/workbench/command')) console.log('Workbench RPC',JSON.stringify(await response.json()));});
     page.on('pageerror', error => errors.push(error.message))
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); if(message.type() === 'warning') console.log(message.text()) })
     try {
@@ -80,7 +79,7 @@ try {
       await body.getByRole('checkbox').check();
       await body.screenshot({animations:'disabled',path:resolve(output,copy.locale+'-settings.png')});
       await body.getByRole('button',{name:init,exact:true}).last().click();
-      await body.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/).waitFor();
+      await body.getByText(/^(?:项目 ID|Project ID): [0-9a-f-]{36}$/).waitFor();
 
       const labels = zh ? {demo:'演示模式',features:'功能与批量运行',model:'完整建模',advance:'推进一个演示阶段',cancel:'取消此运行',confirm:'模拟停止确认',models:'模型',tests:'测试',graph:'图谱'} : {demo:'Demo mode',features:'Features and batches',model:'Full modeling',advance:'Advance one demo stage',cancel:'Cancel this run',confirm:'Simulate stop acknowledgment',models:'Models',tests:'Tests',graph:'Graph'};
       await body.getByRole('button',{name:labels.demo,exact:true}).click();

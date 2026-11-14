@@ -19,6 +19,7 @@
 | `features/project/ProjectPanel.tsx` | 当前项目信息以及初始化、刷新和重新关联入口 |
 | `features/project/ProjectSummary.tsx` | 真实项目版本、正式基线、资源状态与指纹，已登记文件的宿主预览入口 |
 | `features/project/MaterialsForm.tsx` | 初始化材料字段、校验、错误定位和提交 |
+| `features/project/ItemizationPanel.tsx` | 真实条目化运行、调整、候选读取、差异和影响确认；轮询 Host 持久化事实，关闭视图不取消运行 |
 | `features/project/MaterialPathInput.tsx` | 铺满可用宽度的材料路径输入、宿主 Menu 的 `@` 目录选择，以及使用聊天同款 ReferenceChip 的文件预览入口；版本号保留文本输入 |
 | `features/project/file-lookup.ts` | 区分真实空目录、读取失败与宿主未加载文件查询协议；协议不匹配提示重启 DSH 并刷新页面 |
 | `features/models/ModelsPanel.tsx` | 模型类型选择、只读预览、来源和相关命令入口 |
@@ -37,7 +38,7 @@
 
 `index.ts` 将宿主工作区数据和 Remote 命令交给 `WorkbenchData`，通过原生 Session 侧栏 Slot 将 hooks 和操作回调注入 `WorkbenchSeat`。它读取快照及 tab 信息，用 owner 值调用声明的 `sidebar.right.pane.tab.workbench` 子 Slot。该子 Slot 使用 root scope，让同一插件实例的视图 store 不随 Session 上下文释放；`Workbench` 通过框架 `useStore` 读取、通过 `actions` 修改，分键包含 Session、tab 和工作区。展示组件不自行创建宿主连接。
 
-业务事实由 `state/data.ts` 提供，页面选择与草稿由 `state/view-store.ts` 保存，菜单开关由 `WorkbenchChrome` 局部管理。root store 只在当前插件实例内保留，不配置 localStorage 持久化；刷新、插件卸载和强制退出后不保证恢复。
+项目事实由 `state/data.ts` 提供，条目化事实通过 owner-only `workbench/itemization` Remote 读取；页面选择与草稿由 `state/view-store.ts` 保存，菜单开关由 `WorkbenchChrome` 局部管理。root store 只在当前插件实例内保留，不配置 localStorage 持久化；刷新、插件卸载和强制退出后不保证恢复内存草稿。条目化作业、候选和正式采用另由 Host 与工作区持久化保存。
 
 ## 修改时从哪里入手
 
@@ -51,6 +52,10 @@
 
 草稿按 Session、tab 和工作区隔离；侧栏折叠、会话切换及组件重挂载保留内存草稿。`DraftGuard` 接收宿主 `tab.signal`，仅在标签页记录删除或插件卸载时释放对应离开保护；关闭单个标签页后新开的是另一份草稿。刷新及强制退出不提供持久化恢复。
 
-新项目只通过材料表单初始化，不提供已有成果识别或采用命令。材料版本保存在 `materials.version`，顶层 `baseline` 在正式审核采用前保持 `null`。更新后重启 Host 并刷新页面，使前后端同时停用旧命令；已经存在的项目清单不会自动改写。
+新项目通过材料表单初始化，P00 不导入已有成果。材料版本保存在 `materials.version`；阶段 4 的 P02 审核整个候选，正式状态保存在 `.workbench/itemization/`，项目摘要从该状态投影材料和基线。初始 `.workbench/project.json` 不因采用而改写。更新后重启 Host 并刷新页面，确保前后端使用同一版本。
+
+`ItemizationPanel.tsx` 将发起、运行和审核分为三个区域，以摘要和状态标签区分当前基线、候选及运行结果；局部样式由 `ItemizationPanel.module.css` 提供，随入口现有样式 effect 一起注册和清理。`ItemizationReport.tsx` 展示关系引句、来源定位与历史冲突，完整 JSON 保留在展开项中；未识别的报告格式直接展开原始内容。结构通过与业务冲突分别呈现，展示摘要不会解除既有采用限制。详情标签支持键盘切换，卡片、差异分组及产物路径适应窄侧栏，颜色使用宿主语义变量。
+
+原技能流程的报告使用“原技能产物已读取 · 等待审核”，仅表示 Host 能读取必要产物。`panel-content.json` 调整相对路径供页面读取，原始 chunks.json 和技能报告保持原样；执行过程与校验输出保留在独立 Session。原文冲突与人工审核保留项仍阻止采用，生成候选不改变正式基线。本次切换尚未执行构建或验证，具体操作见[验证交接](../../docs/阶段04-原始技能接入与验证交接.md)。
 
 初始化成功后进入流程准备页；刷新重新检查已登记文件，不修改清单中的初始指纹。重新关联展示新旧目录与修订，勾选后提交预期修订号。工作区目录变化会隐藏旧目录的缓存结果，过期响应不能写入新目录状态。

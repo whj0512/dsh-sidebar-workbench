@@ -79,3 +79,7 @@
 .root .pathPicker .field { display: flex; width: 100%; box-sizing: border-box; }
 .materialReference { display: block; max-width: 100%; margin-top: 8px; }
 .resourceEntry { min-width: 0; padding: 12px 0; border-top: .5px solid var(--workbench-line); overflow-wrap: anywhere; }
+.itemization { min-width: 0; }
+.itemization pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; overflow: auto; }
+.itemization select, .itemization textarea { max-width: 100%; box-sizing: border-box; }
+.itemization article { overflow-wrap: anywhere; }

@@ -1,0 +1,125 @@
+{
+  "producer": "workbench-itemization",
+  "input": [
+    {
+      "type": "text",
+      "text": "---\nname: requirement-itemizer\ndescription: Coordinate evidence-based semantic segmentation and exact Markdown extraction for one immutable document candidate.\n---\n\n# Requirement itemization\n\nThe Host owns input snapshots, stage scheduling, Python execution, validation and publication. This skill does not invoke QwenPaw agents or the downstream modeling pipeline. The supplied run directory is the only output directory.\n\n1. Read the original-document text, the Markdown heading index and the adjustment request supplied in the execution Session.\n2. Apply `requirement-chunk-segment` to submit a complete candidate `chunks.json`. Names, section references and quotations must come from the supplied sources. Do not rewrite source content.\n3. The Host applies `requirement-chunk-extract` and organizes the declared paths. It verifies coverage, source quotations, relation endpoints and output files before publishing a candidate.\n4. A generated candidate requires human review. Generation does not adopt a baseline or authorize modeling.\n\nRetain preamble, overview, system overview, interface and appendix content. A title or project directory is not a requirement. An explicitly described system-level parent may be declared in `project_relation_seed.requirements` with source evidence, even when it has no independent functional chunk. Includes edges require direct source evidence, never directory nesting, shared signals or category membership.\n\nThe canonical seed contains `requirements`, `relation_delta` and `consistency_issues`. Each relation has `from`, `to`, `rel_type: includes` and evidence with `section_id` and verbatim `text`. Legacy `inclusion_edges` requires explicit conversion; conflicting representations fail validation.\n\nEvery seed requirement has a canonical `name` and nonempty `evidence`. Both `from` and `to` use exact canonical function names or declared seed requirement names, never requirement IDs such as `UserReq.001`. Keep original IDs in `req_id`, separate from endpoint names. A system-only seed node can represent a source-defined parent without an independent functional chunk.\n\nThe documents in `SOURCE.md` record the imported source revision and are not execution instructions. The rules in this file and the companion adapted skills govern execution.\n\n\n---\nname: requirement-chunk-segment\ndescription: Produce traceable functional chunks and precise physical segments from supplied original text and Markdown.\n---\n\n# Semantic segmentation\n\nReturn `document_info`, `chunking_summary`, `chunks`, and `project_relation_seed` in one JSON object. Each chunk has a unique `chunk_id`, `chunk_type`, `title`, nonempty `source_sections` and `physical_segments`. Source sections and `merged_from` entries contain `dsl_dimension` arrays.\n\nUse `chunk_001`, `chunk_002`, etc. for chunk IDs. The only accepted chunk types are `preamble`, `overview`, `system_overview`, `system_requirements`, `interface`, `appendix`, `controller_requirement`, and `functional_requirement`. Do not use `functional` or `non_functional`. Keep all four top-level fields, even when their objects or arrays are empty. A section entry looks like `{\"section_id\":\"5.1\",\"title\":\"exact heading title\",\"dsl_dimension\":[]}`. A functional chunk's `req_id` is the original requirement identifier, separate from its generated chunk ID.\n\nSubmit a compact index, not copied document bodies: omit `content`, rewritten paragraphs and narrative reports from the JSON. The Host fills `content` from the exact materialized Markdown after extraction. Preserve all source text through complete physical segment coverage, not by asking the model to reproduce it. Use explicit end boundaries when flattened headings interrupt a functional section.\n\nFunctional chunks additionally declare `canonical_function_name`, original `req_id` when present, `parent_requirement` (null for top-level functions), `requirement_path` entries containing `section_id` and `name`, and `hierarchy_evidence` entries containing `section_id` and verbatim `text`. Preserve original business names. Do not manufacture requirement IDs.\n\nMerge dispersed descriptions only when they describe the same function. Different original requirement IDs remain separate. Ambiguity belongs in `consistency_issues`, not a guessed merge. `subfunction` is optional classification and does not establish containment.\n\nEach physical segment names an exact Markdown `section_id` and, where needed, its exact `title`; use `end_before_section_id` to exclude separately assigned children. Ambiguous repeated headings must be reported. Reuse of a source interval requires explicit `copy: true`. Assign all substantive source text, including introductory text, tables and overview chapters. References to absent sections are errors.\n\nRead the Host-generated heading index before choosing segment anchors. An unnumbered heading has `section_id: \"\"`; use its exact `title`. When a title or number occurs more than once, add `position` copied exactly from that heading's index entry. An explicit `end_before_position` must also be an exact indexed heading position after the start; it excludes that heading. These positions locate existing headings without inventing chapter IDs. Use explicit ends to retain body text that MinerU incorrectly marked as a peer heading, and include all intervening heading intervals. Preserve absent original numbers; never promote a body list number into a requirement hierarchy.\n\nUse `notes` for resolved extraction observations, such as flattened headings or source aliases linked unambiguously by the same original requirement ID. Reserve `project_relation_seed.consistency_issues` for unresolved identity, hierarchy, or business contradictions that prevent a reliable candidate; these issues block publication. Do not hide actual ambiguities as notes or remove them merely to pass validation.\n\nRelations require quoted source evidence and resolvable endpoints. A parent is an actual source-defined function, not an invented project root. Do not infer dependencies, conflicts or inclusions from generated directories.\n\n\n---\nname: requirement-chunk-extract\ndescription: Materialize declared Markdown segments without changing function identity or source content.\n---\n\n# Exact extraction\n\nThe Host runs `scripts/split_markdown_chunks.py <markdown> <chunks.json> <output>` with explicit arguments and a fixed run directory. No QwenPaw tools are required.\n\nResolve segments by exact section ID and title. Reject ambiguous starts, ambiguous ends, backward intervals and undeclared overlaps. Never fall back to name similarity or guessed section numbering. Preserve tables and image references. The Host must snapshot and register referenced local assets before an output that depends on them can be consumed.\n\nRepeated headings may use `position` and `end_before_position` copied from the generated heading index. Positions must identify real headings and agree with the declared start ID/title; the end must follow the start. An explicit end marker, when supplied with a position, must agree with that same heading. This allows exact extraction of repeated titles and flattened source headings without guessing an occurrence.\n\nThe output is staged, validated and published by the Host. It is not a baseline until explicitly adopted. Run the itemizer validator before extraction; it verifies source coverage and rejects unsafe file identifiers and hierarchy paths.\n\n\nRun: <run>\nOriginal text characters: 54\nMarkdown characters: 64\nHeading index characters: 298\nPrevious candidate index characters: 0\nAdjustment: First segmentation\nRead the original, Markdown and heading index with itemization_read_source; retain all substantive Markdown. For adjustment, also read source=previous for the prior compact candidate and apply the feedback against it. Submit complete JSON with itemization_submit_chunks. If submitted=false, repair the reported issues and resubmit within the submission budget. Finish only after submitted=true. No downstream modeling or baseline adoption."
+    }
+  ],
+  "headers": [
+    {
+      "config": {
+        "maxTokens": 65536,
+        "provider": "workbench-itemization-fixture",
+        "model": "fixture"
+      },
+      "tools": [
+        {
+          "name": "itemization_read_source",
+          "description": "Read a bounded slice of one snapshotted source. Offsets are character offsets starting at zero.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "original",
+                  "markdown",
+                  "headings",
+                  "previous"
+                ]
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 24000
+              }
+            },
+            "required": [
+              "source",
+              "offset",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "itemization_submit_chunks",
+          "description": "Submit the complete compact chunks.json as a JSON string. Repair rejected submissions within the stated budget; finish after acceptance. The Host validates source coverage and evidence.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "json": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "json"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ],
+  "calls": [
+    {
+      "name": "itemization_read_source",
+      "arguments": {
+        "source": "original",
+        "offset": 0,
+        "count": 2000
+      }
+    },
+    {
+      "name": "itemization_read_source",
+      "arguments": {
+        "source": "markdown",
+        "offset": 0,
+        "count": 2000
+      }
+    },
+    {
+      "name": "itemization_submit_chunks",
+      "arguments": {
+        "json": "{\"document_info\":{\"name\":\"Controlled Session fixture\"},\"chunking_summary\":{},\"chunks\":[{\"chunk_id\":\"chunk_001\",\"title\":\"Overview\",\"chunk_type\":\"overview\",\"source_sections\":[{\"section_id\":\"1\",\"title\":\"Overview\",\"dsl_dimension\":[]}],\"physical_segments\":[{\"section_id\":\"1\"}]},{\"chunk_id\":\"chunk_002\",\"title\":\"Drive\",\"chunk_type\":\"functional_requirement\",\"canonical_function_name\":\"Drive\",\"req_id\":\"REQ-1\",\"parent_requirement\":null,\"requirement_path\":[{\"section_id\":\"2\",\"name\":\"Drive\"}],\"hierarchy_evidence\":[{\"section_id\":\"2\",\"text\":\"Drive shall stop.\"}],\"source_sections\":[{\"section_id\":\"2\",\"title\":\"Drive\",\"dsl_dimension\":[]}],\"physical_segments\":[{\"section_id\":\"2\"}]}],\"project_relation_seed\":{\"requirements\":[{\"name\":\"System\",\"evidence\":[{\"section_id\":\"1\",\"text\":\"System includes Drive.\"}]}],\"relation_delta\":[{\"from\":\"System\",\"to\":\"Drive\",\"rel_type\":\"includes\",\"evidence\":[{\"section_id\":\"1\",\"text\":\"System includes Drive.\"}]}],\"consistency_issues\":[]}}"
+      }
+    }
+  ],
+  "results": [
+    {
+      "isError": false,
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"text\":\"[paragraph 1] System includes Drive. Drive shall stop.\",\"total\":54}"
+        }
+      ]
+    },
+    {
+      "isError": false,
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"text\":\"# 1 Overview\\nSystem includes Drive.\\n# 2 Drive\\nDrive shall stop.\\n\",\"total\":64}"
+        }
+      ]
+    },
+    {
+      "isError": false,
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"submitted\":true,\"report\":\"Source coverage and evidence validation passed; finish the turn.\"}"
+        }
+      ]
+    }
+  ],
+  "finish": {
+    "kind": "completed"
+  }
+}
