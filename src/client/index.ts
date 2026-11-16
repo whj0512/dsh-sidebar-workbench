@@ -17,8 +17,9 @@ import { remoteContribution } from '../shared/remote.ts'
 import { materialFiles } from './features/project/file-lookup.ts'
 import stylesheet from './styles/Workbench.module.css?inline'
 import itemizationStylesheet from './features/project/ItemizationPanel.module.css?inline'
+import modelingStylesheet from './features/models/ModelingPanel.module.css?inline'
 
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'workspaces', 'remote']
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'workspaces', 'remote', 'uiWorkspace']
 
 /**
  * Mount a workbench page for each session's right sidebar.
@@ -31,6 +32,7 @@ export async function apply(ctx: Context): Promise<void> {
 
 /** @param ctx - Child fiber with the mounted Remote namespace in its declared dependencies. */
 function install(ctx: Context): void {
+  const navigation = ctx.get('uiWorkspace') as { openSession(id: string): void } | undefined
   const data = new WorkbenchData(ctx.workspaces, async request => {
     const result = await ctx.remote.workbench.command(request)
     if (!result.ok) throw new Error(result.error.code)
@@ -46,7 +48,7 @@ function install(ctx: Context): void {
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.plugin = WORKBENCH_ID
-    style.textContent = `${stylesheet}\n${itemizationStylesheet}`
+    style.textContent = `${stylesheet}\n${itemizationStylesheet}\n${modelingStylesheet}`
     document.head.append(style)
     return () => style.remove()
   }, 'workbench: stylesheet') // Register the stylesheet for the workbench
@@ -63,6 +65,14 @@ function install(ctx: Context): void {
             const response = await ctx.remote.workbench.itemization({ ...request, sessionId, workspaceId: snapshot.workspace.workspaceId })
             if (!response.ok) throw new Error(response.error.code)
             if (request.action === 'adopt' && response.value.ok) void data.project(sessionId, 'inspect')
+            return response.value
+          },
+          openModelSession: navigation ? id => navigation.openSession(id) : undefined,
+          modeling: async request => {
+            const snapshot = data.source(sessionId).getSnapshot()
+            if (snapshot.phase !== 'ready' || !snapshot.workspace) return { ok: false, problem: 'unbound' }
+            const response = await ctx.remote.workbench.modeling({ ...request, sessionId, workspaceId: snapshot.workspace.workspaceId })
+            if (!response.ok) throw new Error(response.error.code)
             return response.value
           },
           listFiles: async query => {

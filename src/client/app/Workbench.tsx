@@ -17,14 +17,21 @@ import { ProjectSummary } from '../features/project/ProjectSummary.tsx'
 import { WorkflowOverview } from '../components/WorkflowOverview.tsx'
 import { RunHistory, ArtifactList, RemoteConfirmation } from '../features/runs/RunViews.tsx'
 import { ItemizationPanel } from '../features/project/ItemizationPanel.tsx'
+import { ModelingPanel } from '../features/models/ModelingPanel.tsx'
 const EMPTY_RUNS: readonly Run[] = []
 
 /** @param props - Framework-bound hooks, view state and commands. @returns Workspace-following workbench. */
-export function Workbench({ t, sessionId, tab, data, useStore, actions, start, act, project, draftChanged, listFiles, itemization }: WorkbenchProps): ReactNode {
+export function Workbench({ t, sessionId, tab, data, useStore, actions, start, act, project, draftChanged, listFiles, itemization, modeling, openModelSession }: WorkbenchProps): ReactNode {
   const bucket = `${sessionId}:${tab.id}:${data.workspace?.workspaceId ?? 'unbound'}`
-  const view = useStore(s => s.views[bucket] ?? initialView)
-  const change = useCallback((patch: Partial<View>) => actions.change(bucket, patch), [actions, bucket])
-  const hasDraft = view.draft.length > 0 || view.itemizationFeedback.length > 0
+  const executionRunId = data.phase === 'ready'
+    ? data.projectResult?.modelingSessions?.find(session => session.sessionId === sessionId)?.runId
+    : undefined
+  const fallback = useMemo<View>(() => executionRunId
+    ? { ...initialView, page: 'modeling-run', modelingRun: executionRunId }
+    : initialView, [executionRunId])
+  const view = useStore(s => s.views[bucket]) ?? fallback
+  const change = useCallback((patch: Partial<View>) => actions.change(bucket, patch, fallback), [actions, bucket, fallback])
+  const hasDraft = view.draft.length > 0 || view.itemizationFeedback.length > 0 || Object.keys(view.modelingDrafts ?? {}).length > 0
   useEffect(() => { draftChanged(bucket, hasDraft, tab.signal) }, [draftChanged, bucket, hasDraft, tab.signal])
   const go = useCallback((page: Page) => change({ page }), [change])
   const selectModel = useCallback((model: string) => change({ model }), [change])
@@ -123,6 +130,7 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
           <WorkflowOverview
             t={t}
             go={go}
+            demo={view.demo}
           />
         )}
         {!view.demo && view.page === 'review' && (
@@ -140,7 +148,7 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             {t('artifacts')}
           </h2>
         )}
-        {!view.demo && data.projectResult?.project && ['flow', 'review', 'run', 'artifacts'].includes(view.page) && (
+        {!view.demo && data.projectResult?.project && ['review', 'run', 'artifacts'].includes(view.page) && (
           <ItemizationPanel
             key={bucket}
             t={t}
@@ -254,7 +262,18 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             )}
           </>
         )}
-        {view.page === 'features' && (
+        {!view.demo && ['features', 'modeling-run', 'models'].includes(view.page) && (
+          <ModelingPanel
+            key={bucket}
+            t={t}
+            view={view}
+            change={change}
+            remote={modeling}
+            openFile={openMaterial}
+            openSession={openModelSession}
+          />
+        )}
+        {view.demo && view.page === 'features' && (
           <>
             <h2>
               {t('features')}
@@ -304,7 +323,7 @@ export function Workbench({ t, sessionId, tab, data, useStore, actions, start, a
             </div>
           </>
         )}
-        {view.page === 'models' && (
+        {view.demo && view.page === 'models' && (
           <>
             <ModelsPanel
               t={t}

@@ -35,6 +35,7 @@ try {
   assert.equal(initialized.ok, true)
   const open = page.getByRole('button', { name: '打开右侧边栏', exact: true }); if (await open.isVisible()) await open.click()
   await page.getByRole('button', { name: /^需求建模工作台 材料/ }).click()
+  await page.getByRole('button', { name: '条目与差异审核', exact: true }).click()
   const panel = page.getByRole('region', { name: '真实文档条目化', exact: true }); await panel.waitFor()
   for (const phase of ['initial', 'adjustment']) {
     if (phase === 'initial') await panel.getByRole('button', { name: '开始条目化', exact: true }).click()

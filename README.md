@@ -4,7 +4,7 @@
 
 每阶段须同时交付可操作页面、真实执行与可核验产物，并经人工审核通过后才能继续；demo 或测试适配器不能替代真实业务验收。
 
-阶段 1–3 已获人工审核通过。2026-11-14 用户确认阶段 4 主功能「条目化文档」已完成，并授权「测试009」当前 V1 候选用于阶段 5 开发。正式基线由用户在面板采用后建立，V2 比较和采用待验收。 [阶段 4 验收记录](docs/阶段验收/阶段04-P01-P02-P04.md)
+阶段 1–3 已获人工审核通过。2026-11-14 用户确认阶段 4 主功能「条目化文档」已完成。「测试009」V1 已正式采用，采用记录保留已知原文冲突。V2 比较和采用待验收。 [阶段 4 验收记录](docs/阶段验收/阶段04-P01-P02-P04.md)
 
 独立的 DeepSeek Harness Web 插件。在右侧栏“开始”页提供“我的工作台”，通过原生 React 页面准备项目材料、运行条目化并审核候选版本。
 
@@ -172,3 +172,13 @@ P00 支持真实 PDF/DOCX 与 Markdown 的基本结构检查、材料版本登�
 新增 run.operation 和候选索引中的可选读取路径，当前代码兼容读取既有记录，不改写历史 Session；旧构建降级读取新记录不作保证。更新后须重新构建插件、重启 Host 并刷新页面，不能只刷新浏览器。
 
 受控模型和历史会话快照的适用范围见 [tests/expected/README.md](tests/expected/README.md)。后续接入和剩余工作见[阶段 4 执行记录](docs/阶段04-执行记录.md)。
+
+## 阶段 5 功能建模至 DSL
+
+在流程页打开功能列表，从已采用基线勾选一个或多个功能，点击「建模至 DSL」。Host 为每个功能创建独立运行和 DSH 执行会话，各自生成及校验 DSL。同一功能已有未结运行时不能重复启动。在运行详情切换功能、打开关联对话或单独取消一项任务。模型页可按需求 ID 查看原文、模型定位、断言及待对齐项。缺少页面或交互依据的功能显示 DialogMap 不适用。
+
+执行 preset 需提供可用模型和可调用的 DSH 技能 `requirement-context-parse`、`requirement-environment`、`requirement-externalscenario`、`requirement-constraint`、`requirement-dialogmap` 和 `requirement-analysis-pipeline`。从技能提供方的本地资源获取 grammar 与校验脚本。按 DSH 的小写连字符规则注册原包，保留其资源目录。使用 `itemization.pythonExecutable` 指定已安装 textX 的 Python。
+
+`itemization.modelingStageTimeoutMs` 默认 3600000 毫秒。建模从输入快照开始按阶段独立计时，阶段内的模型调用、校验和重试共享该阶段的时限。条目化整次运行仍使用 `itemization.operationTimeoutMs`。
+
+运行产物保存在 `workbench-runs/<runId>/`。Host 按项目串行发布，通过校验的运行在 `.workbench/modeling/` 追加模型及项目关系记录。并行任务合并已发布的其他功能增量。若新增关系影响某项模型的输入，该模型标为过期。旧模型、失败产物和条目化种子保留可查。对齐及测试生成见后续阶段。升级后重建并重启相应 Host。若要回退，先备份 `sidebar_workbench` 存储及工作区成果，旧版本不会显示新增的建模记录。

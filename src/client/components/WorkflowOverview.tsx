@@ -6,7 +6,7 @@ import type { Page } from '../state/view-store.ts'
 import css from '../styles/Workbench.module.css'
 
 /** @param props - Localized copy and navigation. @returns Workflow overview. */
-export const WorkflowOverview = memo(function WorkflowOverview({ t, go }: { t: TranslateNS<'sidebarWorkbench'>; go: (page: Page) => void }) {
+export const WorkflowOverview = memo(function WorkflowOverview({ t, go, demo }: { t: TranslateNS<'sidebarWorkbench'>; go: (page: Page) => void; demo: boolean }) {
   return (
     <>
       <p className={css.flowHint}>{t('next')}</p>
@@ -33,13 +33,15 @@ export const WorkflowOverview = memo(function WorkflowOverview({ t, go }: { t: T
           </span>
           <div className={css.stepContent}>
             <h2>{t('stageTwo')}</h2>
-            <p>{t('stageTwoHint')}</p>
+            <p>
+              {t(demo ? 'stageTwoHint' : 'modelingFlowHint')}
+            </p>
             <Button
               className={css.secondaryButton}
               variant="outline"
               onClick={() => go('features')}
             >
-              {t('features')}
+              {t(demo ? 'features' : 'modelingFeatures')}
             </Button>
           </div>
         </article>

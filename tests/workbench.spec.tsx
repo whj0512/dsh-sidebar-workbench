@@ -1,7 +1,8 @@
 /** Native page behavior with real view store and demo domain; no Host or model is impersonated. */
 import { useSyncExternalStore } from 'react'
+import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, act, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, act, waitFor, within } from '@testing-library/react'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { Workbench as WorkbenchContent, type WorkbenchProps as ContentProps } from '../src/client/app/Workbench.tsx'
@@ -11,13 +12,20 @@ import { WorkbenchData } from '../src/client/state/data.ts'
 import { createViewStore } from '../src/client/state/view-store.ts'
 import { en, zh } from '../src/client/i18n/locales.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ModelingRunView } from '../src/shared/modeling-api.ts'
 
 afterEach(cleanup)
 type WorkbenchProps = WorkbenchSeatRuntime & Pick<ContentProps, 'useStore' | 'actions' | 't'>
 function Workbench(props: WorkbenchProps) {
   const data = props.useWorkbench(snapshot => snapshot)
   const { tab } = props.useTabInfo()
-  return <WorkbenchContent {...props} data={data} tab={tab} />
+  return (
+    <WorkbenchContent
+      {...props}
+      data={data}
+      tab={tab}
+    />
+  )
 }
 function tabInfo(id: string, signal: AbortSignal): ReturnType<WorkbenchProps['useTabInfo']> {
   return { sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane' as ReturnType<WorkbenchProps['useTabInfo']>['panel']['id'] },
@@ -52,6 +60,7 @@ it('keeps model previews stable while editing drafts and refreshes translated pa
   const props = { ...f.props, t, draftChanged }
   const body = render(<Workbench {...props} />)
   try {
+    fireEvent.click(screen.getByRole('button', { name: en.demo }))
     fireEvent.click(screen.getByRole('tab', { name: en.models }))
     fireEvent.click(screen.getByRole('button', { name: 'Statechart' }))
     const previewCalls = () => t.mock.calls.filter(([key]) => key === 'modelReadOnly').length
@@ -76,7 +85,8 @@ it.each([en, zh])('shows production unavailability and all four keyboard-accessi
   expect(screen.getAllByRole('tab')).toHaveLength(4)
   fireEvent.keyDown(screen.getByRole('tab', { name: dictionary.flow }), { key: 'ArrowRight' })
   expect(screen.getByRole('tab', { name: dictionary.models }).getAttribute('aria-selected')).toBe('true')
-  expect(screen.getByRole('button', { name: dictionary.align }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByText(dictionary.modelingUnavailable)).toBeTruthy()
+  expect(screen.queryByText(dictionary.modelSample)).toBeNull()
   f.data.dispose()
 })
 it('demonstrates a run without production writes and retains facts across body remount', () => {
@@ -98,6 +108,87 @@ it('distinguishes pending workspace membership from unbound', () => {
   act(() => f.workspace.set({ ...f.workspace.getSnapshot(), phase: 'pending', state: 'loading' }))
   expect(screen.getAllByText(en.loading).length).toBeGreaterThan(0)
   expect(screen.queryByRole('button', { name: en.initialize })).toBeNull(); f.data.dispose()
+})
+
+it('opens only the matching modeling run in its execution Session and keeps itemization under its own entry', async () => {
+  const { props, data, workspace, tabLifetime } = fixture()
+  const feature = { id: randomUUID(), name: 'Drive', requirementId: 'UserReq.001' }
+  const secondFeature = { id: randomUUID(), name: 'Brake', requirementId: 'UserReq.002' }
+  const features = [feature, secondFeature]
+  const baseline = { id: randomUUID(), label: 'V1' }
+  const executionSessionId = 'model-execution'
+  const run: ModelingRunView = {
+    id: randomUUID(), baselineId: baseline.id, materialLabel: baseline.label, feature, executionSessionId,
+    state: 'running', stage: 'parse', sequence: 1, updatedAt: '2026-11-14T00:00:00.000Z', completed: ['snapshot'], artifacts: [], stale: false,
+  }
+  const newerRun = { ...run, id: randomUUID(), feature: secondFeature, executionSessionId: 'other-execution' }
+  const ws: WorkspaceView = {
+    workspaceId: 'w1' as WorkspaceView['workspaceId'], path: '/project', title: 'Shared project',
+    sessionIds: ['s1', executionSessionId].map(id => id as WorkspaceView['sessionIds'][number]), createdAt: '', updatedAt: '',
+  }
+  workspace.set({ ...workspace.getSnapshot(), items: [ws] })
+  const sourceData = {
+    ...data.source('s1').getSnapshot(),
+    projectResult: {
+      ok: true,
+      project: { schema: 1, projectId: randomUUID(), baseline: baseline.label, materials: null, artifacts: [], createdAt: '', validation: 'not-checked' },
+    },
+  } satisfies ContentProps['data']
+  const executionData = {
+    ...sourceData,
+    projectResult: {
+      ...sourceData.projectResult,
+      modelingSessions: [{ sessionId: executionSessionId, runId: run.id }],
+    },
+  }
+  const itemization = vi.fn(async () => ({ ok: true }))
+  const started: ModelingRunView[] = []
+  const modeling: NonNullable<ContentProps['modeling']> = vi.fn(async request => {
+    if (request.action === 'start') {
+      const accepted = request.featureId === feature.id ? run : newerRun
+      started.unshift(accepted)
+      return { ok: true, baseline, features, runs: [...started], acceptedRunId: accepted.id }
+    }
+    return { ok: true, available: true, baseline, features, runs: [...started] }
+  })
+  const content = {
+    ...props, data: sourceData, tab: tabInfo('tab1', tabLifetime.signal).tab, modeling, itemization,
+  } as ContentProps
+  const body = render(
+    <WorkbenchContent {...content} />,
+  )
+  try {
+    expect(screen.getAllByRole('heading', { name: en.stageOne })).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: en.itTitle })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.modelingFeatures }))
+    fireEvent.click(await screen.findByRole('button', { name: /Drive/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Brake/ }))
+    expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: en.modelingTitle }))
+    await screen.findByText(run.id)
+    expect(started.map(item => item.feature.id)).toEqual([secondFeature.id, feature.id])
+    expect(screen.getByText('Modeling runs in progress: 2')).toBeTruthy()
+    fireEvent.change(screen.getByRole('combobox', { name: en.run }), { target: { value: newerRun.id } })
+    expect(screen.getByText(newerRun.id)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: en.itTitle })).toBeNull()
+    expect(itemization).not.toHaveBeenCalled()
+
+    body.rerender(
+      <WorkbenchContent
+        {...content}
+        sessionId={executionSessionId}
+        data={executionData}
+      />,
+    )
+    await screen.findByText(run.id)
+    expect(screen.queryByText(newerRun.id)).toBeNull()
+    expect(screen.queryByRole('region', { name: en.itTitle })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.back }))
+    fireEvent.click(screen.getByRole('button', { name: en.review }))
+    expect(screen.getAllByRole('region', { name: en.itTitle })).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: en.modelingTitle })).toBeNull()
+    await waitFor(() => expect(itemization).toHaveBeenCalled())
+  } finally { data.dispose() }
 })
 
 it('shares workspace demo facts while same-workspace Sessions retain independent tab drafts through remount', () => {
@@ -126,6 +217,8 @@ it('shares workspace demo facts while same-workspace Sessions retain independent
   try {
     const a = within(left.container)
     const b = within(right.container)
+    fireEvent.click(a.getByRole('button', { name: en.demo }))
+    fireEvent.click(b.getByRole('button', { name: en.demo }))
     fireEvent.click(a.getByRole('tab', { name: en.models }))
     fireEvent.click(b.getByRole('tab', { name: en.models }))
     fireEvent.click(a.getByRole('button', { name: 'Statechart' }))

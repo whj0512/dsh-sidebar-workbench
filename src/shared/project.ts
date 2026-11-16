@@ -25,6 +25,7 @@ export const problemSchema = z.enum(['unbound', 'directory', 'permission', 'esca
 export type ProjectProblem = z.infer<typeof problemSchema>
 export const resultSchema = z.object({
   ok: z.boolean(), problem: problemSchema.optional(), project: manifestSchema.optional(), binding: bindingSchema.optional(),
+  modelingSessions: z.array(z.object({ sessionId: z.string(), runId: z.string().uuid() }).strict()).optional(),
   files: z.array(z.object({ path: z.string(), directory: z.boolean() }).strict()).optional(),
   resources: z.array(resourceSchema).optional(),
   relink: z.object({ previousWorkspaceId: z.string(), previousRoot: z.string(), nextWorkspaceId: z.string(), nextRoot: z.string(),

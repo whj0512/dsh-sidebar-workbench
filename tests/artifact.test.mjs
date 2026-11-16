@@ -23,6 +23,7 @@ test('the client artifact registers a factory and requests only host-shared modu
     throw new Error(`Unexpected bundled runtime import: ${name}`)
   })
   assert.deepEqual(Object.keys(exports).sort(), ['apply', 'inject'])
+  assert.ok(exports.inject.includes('uiWorkspace'), 'The model run view uses Host Session navigation')
   assert.equal(typeof exports.apply, 'function')
   assert.deepEqual(new Set(requests), new Set(['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store', 'zod']))
   assert.doesNotMatch(source, /react\.production\.min|react\.development\.js|__SECRET_INTERNALS/, 'React must remain host-shared')

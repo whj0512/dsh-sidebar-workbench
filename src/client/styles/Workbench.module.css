@@ -83,3 +83,16 @@
 .itemization pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; overflow: auto; }
 .itemization select, .itemization textarea { max-width: 100%; box-sizing: border-box; }
 .itemization article { overflow-wrap: anywhere; }
+.artifactList {
+  display: grid;
+  gap: 0.35rem;
+  padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.code {
+  max-block-size: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -13,11 +13,13 @@ it('releases all contributions on unload and registers once on reactivation', as
   const dictionaries = new Set<string>()
   const subscriptions = new Set<() => void>()
   let bodyInject!: (sessionId: string) => WorkbenchInjected
+  const openedSessions: string[] = []
   // Record only provider methods used by this plugin; the real Cordis fiber owns disposal.
   ctx.provide('sidebarRightTabs', registry as never)
   ctx.provide('workspaces', { list: { subscribe: (fn: () => void) => { subscriptions.add(fn); return () => subscriptions.delete(fn) }, getSnapshot: () => ({ items: [], state: 'idle', phase: 'ready' }) } } as never)
   ctx.provide('remote', { $mount: async () => () => {}, workbench: { command: async () => ({ ok: true }) } } as never)
   ctx.provide('remote.workbench', {} as never)
+  ctx.provide('uiWorkspace', { openSession: (sessionId: string) => openedSessions.push(sessionId) } as never)
   ctx.provide('locale', {
     bind: () => (key: string) => key,
     register: (namespace: string) => {
@@ -52,6 +54,8 @@ it('releases all contributions on unload and registers once on reactivation', as
       expect(subscriptions.size).toBe(1)
       expect(document.querySelectorAll(`style[data-plugin="${WORKBENCH_ID}"]`)).toHaveLength(1)
       const lifetime = new AbortController()
+      bodyInject('session-fixture').openModelSession?.('model-session')
+      expect(openedSessions).toHaveLength(cycle + 1)
       bodyInject('session-fixture').draftChanged('tab-fixture', true, lifetime.signal)
       const dirty = new Event('beforeunload', { cancelable: true })
       window.dispatchEvent(dirty)

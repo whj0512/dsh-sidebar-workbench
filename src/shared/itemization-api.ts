@@ -16,6 +16,7 @@ export const itemizationConfigSchema = z.object({
     projectId: z.string().uuid(), candidateId: z.string().uuid(), reason: z.string().trim().min(1),
   }).strict()).default([]),
   operationTimeoutMs: z.number().int().positive().max(2147483647).default(1200000),
+  modelingStageTimeoutMs: z.number().int().positive().max(2147483647).default(3600000),
   terminationGraceMs: z.number().int().positive().max(2147483647).default(5000),
   // Compatibility with profiles that set an output limit for the former Python runner.
   maxOutputBytes: z.number().int().positive().optional(),

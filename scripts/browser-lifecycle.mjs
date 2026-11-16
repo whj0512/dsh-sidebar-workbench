@@ -13,9 +13,14 @@ const browser = await launchBrowser()
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'en-US' })
 context.setDefaultTimeout(7000)
 const page = await context.newPage()
-const report = { origin: new URL(target).origin, browser: browser.version(), fixtureRoot: root, checks: [], errors: [] }
+const report = { origin: new URL(target).origin, browser: browser.version(), fixtureRoot: root, checks: [], errors: [], hostAccountDiagnostics: [] }
 page.on('pageerror', error => report.errors.push(error.message))
-page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') report.errors.push(message.text()) })
+page.on('console', message => {
+  if (message.type() !== 'error' && message.type() !== 'warning') return
+  const diagnostic = message.text()
+  if (diagnostic === '[deepseek-account] account read failed {field: profile}') report.hostAccountDiagnostics.push(diagnostic)
+  else report.errors.push(diagnostic)
+})
 const check = (name, details) => report.checks.push({ name, result: 'passed', ...details })
 const regions = () => page.getByRole('region', { name: 'Requirements workbench', exact: true })
 const protect = () => page.evaluate(() => {
@@ -24,12 +29,14 @@ const protect = () => page.evaluate(() => {
   return event.defaultPrevented
 })
 const enter = async () => {
-  const expand = page.getByRole('button', { name: 'Open right sidebar', exact: true })
-  if (await expand.isVisible()) await expand.click()
-  if (await page.getByRole('button', { name: /^Requirements workbench Materials/ }).isVisible()) {
-    await page.getByRole('button', { name: /^Requirements workbench Materials/ }).click()
-  }
-  await regions().first().waitFor()
+  const expand = page.getByRole('button', { name: 'Open right sidebar', exact: true }).first()
+  const entry = page.getByRole('button', { name: /^Requirements workbench Materials/ }).first()
+  const body = regions().first()
+  await body.or(entry).or(expand).first().waitFor({ state: 'visible' })
+  if (!await body.isVisible() && await expand.isVisible()) await expand.click()
+  await body.or(entry).first().waitFor({ state: 'visible' })
+  if (!await body.isVisible() && await entry.isVisible()) await entry.click()
+  await body.waitFor()
 }
 const workspace = async suffix => {
   const dir = await mkdtemp(resolve(root, suffix + '-'))
@@ -76,7 +83,9 @@ try {
   await page.keyboard.press('ArrowRight')
   assert.equal(await body.getByRole('tab', { name: 'Models', exact: true }).getAttribute('aria-selected'), 'true')
   assert.equal(await body.getByRole('tab', { name: 'Models', exact: true }).evaluate(el => el === document.activeElement), true)
-  assert.equal(await body.getByRole('button', { name: 'Align and revalidate', exact: true }).isDisabled(), true)
+  assert.equal(await body.getByRole('button', { name: 'Align and revalidate', exact: true }).count(), 0)
+  await body.getByRole('button', { name: 'Demo mode', exact: true }).click()
+  await body.getByRole('tab', { name: 'Models', exact: true }).click()
   await body.getByRole('button', { name: 'Statechart', exact: true }).click()
   await body.getByRole('textbox').fill('Session A / first pane')
   await body.getByRole('textbox').focus()
@@ -100,6 +109,7 @@ try {
   await page.getByRole('button', { name: /^Requirements workbench Materials/ }).click()
   assert.equal(await regions().count(), 2)
   const second = regions().nth(1)
+  await second.getByRole('button', { name: 'Demo mode', exact: true }).click()
   await second.getByRole('tab', { name: 'Models', exact: true }).click()
   assert.equal(await second.getByRole('textbox').inputValue(), '')
   await second.getByRole('textbox').fill('Session A / second pane')
@@ -132,6 +142,7 @@ try {
   await enter()
   body = regions().first()
   await body.getByText(b.title, { exact: true }).waitFor()
+  await body.getByRole('button', { name: 'Demo mode', exact: true }).click()
   await body.getByRole('tab', { name: 'Models', exact: true }).click()
   assert.equal(await body.getByRole('textbox').inputValue(), '')
   await body.getByRole('textbox').fill('Session B isolated')

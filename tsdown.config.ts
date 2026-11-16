@@ -38,9 +38,10 @@ export default defineConfig([
   {
     entry: { client: 'src/client/index.ts' }, outDir: 'lib', format: 'cjs', platform: 'browser', clean: false,
     dts: false, sourcemap: false, minify: true, target: 'es2022', plugins: [cssModules],
-    deps: { neverBundle: ['react', 'react/jsx-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store', 'zod'] },
+    deps: { alwaysBundle: ['@antv/x6'], neverBundle: ['react', 'react/jsx-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store', 'zod'] },
     outputOptions: {
       entryFileNames: 'client.js',
+      codeSplitting: false,
       banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, factory: (require) => {`,
       intro: 'var module = { exports: {} }; var exports = module.exports;',
       footer: 'return module.exports; } });',
