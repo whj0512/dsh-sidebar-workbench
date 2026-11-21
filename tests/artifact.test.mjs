@@ -35,3 +35,19 @@ test('the host artifact is loadable ESM and declares its real data dependencies'
   assert.deepEqual(entry.inject, ['workspaceRegistry', 'storageDomain', 'typert', 'remoteAccess'])
   assert.equal(typeof entry.apply, 'function')
 })
+
+test('Flow and DSL ship as separately registered lazy client chunks', async () => {
+  const entry = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const { files } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  for (const [name, symbol] of [['client.flow.js', 'renderFlow'], ['client.dsl.js', 'mountDslEditor']]) {
+    assert.ok(files.includes('lib/' + name))
+    assert.ok(entry.includes('./' + name))
+    const code = await readFile(new URL('../lib/' + name, import.meta.url), 'utf8')
+    let registration
+    runInNewContext(code, { window: { __ModuleLoader__: { load: value => { registration = value } } } })
+    assert.equal(registration.id, 'dsh-plugin-sidebar-workbench')
+    assert.equal(registration.chunk, name)
+    assert.equal(typeof registration.factory, 'function')
+    assert.ok(code.includes(symbol))
+  }
+})

@@ -179,6 +179,29 @@ P00 支持真实 PDF/DOCX 与 Markdown 的基本结构检查、材料版本登�
 
 执行 preset 需提供可用模型和可调用的 DSH 技能 `requirement-context-parse`、`requirement-environment`、`requirement-externalscenario`、`requirement-constraint`、`requirement-dialogmap` 和 `requirement-analysis-pipeline`。从技能提供方的本地资源获取 grammar 与校验脚本。按 DSH 的小写连字符规则注册原包，保留其资源目录。使用 `itemization.pythonExecutable` 指定已安装 textX 的 Python。
 
-`itemization.modelingStageTimeoutMs` 默认 3600000 毫秒。建模从输入快照开始按阶段独立计时，阶段内的模型调用、校验和重试共享该阶段的时限。条目化整次运行仍使用 `itemization.operationTimeoutMs`。
+`itemization.modelingStageTimeoutMs` 默认 3600000 毫秒。建模从输入快照开始按阶段独立计时，阶段内的模型调用和校验共享该阶段的时限。每阶段只生成、校验一次，校验失败后记录问题并继续，不自动发送修正请求。四类 DSL 分别进行一次语法校验，跨文件引用和需求映射在统一验证阶段检查一次。条目化整次运行仍使用 `itemization.operationTimeoutMs`。
 
-运行产物保存在 `workbench-runs/<runId>/`。Host 按项目串行发布，通过校验的运行在 `.workbench/modeling/` 追加模型及项目关系记录。并行任务合并已发布的其他功能增量。若新增关系影响某项模型的输入，该模型标为过期。旧模型、失败产物和条目化种子保留可查。对齐及测试生成见后续阶段。升级后重建并重启相应 Host。若要回退，先备份 `sidebar_workbench` 存储及工作区成果，旧版本不会显示新增的建模记录。
+运行产物保存在 `workbench-runs/<runId>/`。Host 按项目串行发布，执行完成的运行在 `.workbench/modeling/` 追加模型及项目关系记录。校验失败也可完成发布；`validation.json` 的 `passed: false`、分阶段 `checks/*-artifacts-1.json` 和界面提示保留问题。无效的映射证据不计为覆盖，关系增量无效时保留该功能上次有效贡献，没有历史贡献时不增加关系。执行错误、取消、超时和项目身份、指纹或修订冲突仍停止运行。并行任务合并已发布的其他功能增量。若新增关系影响某项模型的输入，该模型标为过期。旧模型、失败产物和条目化种子保留可查。对齐及测试生成见后续阶段。升级后重建并重启相应 Host。若要回退，先备份 `sidebar_workbench` 存储及工作区成果，旧版本不会显示新增的建模记录。
+
+`requirement_dsl_map.json` 的 `coverage[].artifacts` 保存需求在本次运行中的实际 DSL 定位。场景、状态机和对话图按声明名定位，Environment 按带需求标注的组件或交互定位。外部依赖和数据定义也可以关联模型。对于可测试需求，`status`、`assertions` 和 `uncovered_assertions` 逐项记录结果断言的核验情况，因此有模型定位的需求仍可能是 `partial` 或 `missing`。
+
+## P05 模型编辑器
+
+在「模型」页选择运行、模型类型、文件和修订。「DSL 代码」使用 Monaco 编辑，
+「Flow」显示 BAIC 四类模型画布。拖动只调整修订布局，模型内容通过 DSL 编辑。
+Flow 工具栏可导出当前画布 JSON。保存修订后，使用「采用修订」校验并发布。
+
+Monaco 由浏览器直连 BAIC 语言服务。默认端口为 Environment 3001、
+ExternalScenario 3002、Statechart 3000、DialogMap 3004，地址均为
+`ws://127.0.0.1`。可在 profile 的插件配置中覆盖对应地址，例如：
+
+```yaml
+- id: sidebar-workbench
+  config:
+    modelEditor:
+      languageServiceUrls:
+        Environment: wss://baic.example.org/lsp/environment
+```
+
+Flow 仍使用 Host 的 `modelEditor.converterBaseUrl` 转换 DSL，默认
+`http://127.0.0.1:8000`。语言服务离线时可以继续编辑。

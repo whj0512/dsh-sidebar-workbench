@@ -1,0 +1,60 @@
+import { type FC, type ReactNode } from 'react'
+
+interface NodeWrapperProps {
+  /** 节点尺寸 */
+  width?: number
+  height?: number
+  /** 样式配置 */
+  stroke?: string
+  fill?: string
+  fontColor?: string
+  fontSize?: number
+  node?: any
+  /** 子内容 */
+  children?: ReactNode
+}
+
+const NodeWrapper: FC<NodeWrapperProps> = (props) => {
+  const {
+    width: propWidth,
+    height: propHeight,
+    stroke: propStroke,
+    fill: propFill,
+    fontColor: propFontColor,
+    fontSize: propFontSize,
+    node,
+    children,
+  } = props
+  const nodeData = node?.getData?.() || {}
+  const nodeSize = node?.getSize?.() || {}
+
+  const width = propWidth || nodeSize.width || nodeData.width || 80
+  const height = propHeight || nodeSize.height || nodeData.height || 120
+  const stroke = propStroke || nodeData.stroke || '#333'
+  const fill = propFill || nodeData.fill || '#fff'
+  const fontColor = propFontColor || nodeData.fontColor || '#333'
+  const fontSize = propFontSize || nodeData.fontSize || 12
+  const nodeName = nodeData.nodeName || ''
+
+  return (
+    <div
+      className="node-wrapper"
+      style={{
+        width,
+        height,
+        borderColor: stroke,
+        backgroundColor: fill,
+        color: fontColor,
+        fontSize,
+      }}
+    >
+      <div className="node-wrapper__rect">
+      </div>
+      <div className="node-wrapper__content">
+        {children || nodeName}
+      </div>
+    </div>
+  )
+}
+
+export default NodeWrapper

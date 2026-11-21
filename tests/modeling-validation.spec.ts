@@ -18,10 +18,43 @@ const model: ModelSource = {
 }
 const row = { requirement_id: 'REQ-1', result: 'Stops', file: model.path, element: 'Stop', code: 'to: Stopped' }
 
+it('links annotated models and environment declarations independently of behavioral coverage', () => {
+  const external = { ...requirements.requirements[0]!, requirement_id: 'REQ-10', testability: 'external_dependency' as const,
+    expected_results: [], reason: 'The MCU provides the signal.' }
+  const data = { ...external, requirement_id: 'REQ-2', testability: 'non_testable' as const }
+  const input = { ...requirements, requirements: [...requirements.requirements, external, data] }
+  const scenario: ModelSource = { kind: 'ExternalScenario', path: 'ExternalScenarios/停车.dsl',
+    text: '// requirement_ids: REQ-1, REQ-unknown\n// source\n// scope\nScenario 停车 { Interaction Brake; }' }
+  const env: ModelSource = { kind: 'Environment', path: 'Environment.dsl', text: [
+    'Environment {', '  // [requirement_id: REQ-10]', '  // source', '  // scope', '  Device MCU;',
+    '  Device Other; // unrelated [REQ-1]', '  Device Another;', '  Connect from MCU to Other {',
+    '    // [REQ-2]', '    Interaction Brake { Signal B };', '  };', '}',
+  ].join('\n') }
+  const dialog: ModelSource = { kind: 'DialogMap', path: 'DialogMaps/提示.dsl',
+    text: 'DialogMap 提示 {\n// [requirement_id: REQ-1]\nPage P { description: "// requirement_ids: REQ-2" }\n}' }
+  const map = makeMapping(input, [scenario, model, env, dialog], { Environment: [], ExternalScenario: [] })
+  expect(map.coverage).toMatchObject([
+    { status: 'missing', artifacts: ['DialogMaps/提示.dsl#提示', 'ExternalScenarios/停车.dsl#停车', 'Statecharts/Drive.dsl#Drive'],
+      assertions: [], uncovered_assertions: ['Stops', 'Shows warning'] },
+    { status: 'external_dependency', artifacts: ['Environment.dsl#MCU'], assertions: [] },
+    { status: 'non_testable', artifacts: ['Environment.dsl#Brake'], assertions: [] },
+  ])
+})
+
 it('retains uncovered results and refuses code taken from a different element', () => {
   const map = makeMapping(requirements, [model], { Statechart: [row] })
   expect(map.coverage[0]).toMatchObject({ status: 'partial', assertions: ['Stops'], uncovered_assertions: ['Shows warning'] })
   expect(() => makeMapping(requirements, [model], { Statechart: [{ ...row, code: 'to: Active' }] })).toThrow('Unverified DSL location')
+})
+
+it('collects each bad evidence row once and retains only verified assertions in advisory mode', () => {
+  const issues: unknown[] = []
+  const map = makeMapping(requirements, [model], { Statechart: [
+    { ...row, code: 'to: Active' }, row, { requirement_id: 'REQ-1' },
+  ], DialogMap: {} }, (kind, error) => issues.push({ kind, error }))
+  expect(issues).toHaveLength(3)
+  expect(map.coverage[0]).toMatchObject({ status: 'partial', assertions: ['Stops'], uncovered_assertions: ['Shows warning'] })
+  expect(() => makeMapping(requirements, [model], { DialogMap: {} })).toThrow('Invalid DialogMap evidence array')
 })
 
 it('validates the inline requirement annotation emitted by the context skill', () => {

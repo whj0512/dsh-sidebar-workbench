@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, Input, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { modelKinds, modelRunActive, modelRunUnsettled, modelingStages, type ModelProblem, type ModelingAction, type ModelingResult, type ModelingRunView } from '../../../shared/modeling-api.ts'
+import { modelKinds, modelRunActive, modelRunDeletable, modelRunUnsettled, modelingStages, type ModelProblem, type ModelingAction, type ModelingResult, type ModelingRunView } from '../../../shared/modeling-api.ts'
 import type { View } from '../../state/view-store.ts'
 import type { EditorResult } from '../../../shared/model-editor.ts'
 import { ModelFileEditor } from './ModelFileEditor.tsx'
@@ -18,6 +18,7 @@ type Props = {
 type Mapped = { requirement_id: string; status: string; artifacts: string[]; assertions: string[]; uncovered_assertions: string[]; reason: string }
 type Requirement = { requirement_id: string; source_text: string; source_location: { section: string; start_line: number; end_line: number } }
 type StartFailure = { id: string; feature: string; problem: ModelProblem; detail?: string }
+const RECENT_RUN_COUNT = 5
 const modelLocation: Record<string, string> = {
   Environment: 'Environment.dsl', ExternalScenario: 'ExternalScenarios/', Statechart: 'Statecharts/', DialogMap: 'DialogMaps/',
 }
@@ -31,6 +32,9 @@ export function ModelingPanel({ t, view, change, remote, openFile, openSession }
   const [error, setError] = useState<ModelingResult | undefined>()
   const [startFailures, setStartFailures] = useState<StartFailure[]>([])
   const [busy, setBusy] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string>()
+  const [deleteError, setDeleteError] = useState<ModelingResult>()
+  const [historyOpen, setHistoryOpen] = useState(false)
   const requestKeys = useRef(new Map<string, string>())
   const pending = useRef(false)
   const latestRead = useRef(0)
@@ -83,8 +87,31 @@ export function ModelingPanel({ t, view, change, remote, openFile, openSession }
     if (response.ok) setResult(response)
     else setError(response)
   })
+  const deleteRun = (runId: string) => mutate(async (send, isCurrent) => {
+    setDeleteError(undefined)
+    let response: ModelingResult
+    try { response = await send({ action: 'delete-run', runId }) }
+    catch (error) {
+      const incompatible = error instanceof Error && (error.message === 'gateway/input-invalid' || error.message === 'gateway/method-unavailable')
+      response = { ok: false, problem: incompatible ? 'host-upgrade-required' : 'unavailable' }
+    }
+    if (!isCurrent()) return
+    if (!response.ok) {
+      setDeleteError(response)
+      return
+    }
+    const confirmed = response.deletedRunId === runId || (response.runs !== undefined && !response.runs.some(run => run.id === runId))
+    if (!confirmed) {
+      setDeleteError({ ok: false, problem: 'host-upgrade-required' })
+      return
+    }
+    setResult(current => current ? { ...current, runs: current.runs?.filter(run => run.id !== runId) } : current)
+    setDeleteTarget(undefined)
+    if (view.modelingRun === runId) change({ modelingRun: undefined })
+  })
   const baseline = result?.baseline
-  const runs = result?.runs ?? []
+  const runs = result?.runs?.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) ?? []
+  const visibleRuns = view.modelingShowOlderRuns ? runs : runs.slice(0, RECENT_RUN_COUNT)
   const activeCount = runs.filter(run => modelRunActive(run.state)).length
   const blocked = new Map(runs.filter(run => modelRunUnsettled(run.state)).map(run => [run.feature.id, run]))
   const selectedIds = view.modelingSelection?.baselineId === baseline?.id ? view.modelingSelection?.featureIds ?? [] : []
@@ -355,30 +382,173 @@ export function ModelingPanel({ t, view, change, remote, openFile, openSession }
           )}
           {run && (
             <>
-              <div className={css.card}>
+              <div className={css.runPicker}>
+                <span className={css.caption}>
+                  {t('run')}
+                </span>
+                <Menu
+                  className={css.runPickerControl}
+                  listClassName={css.historyMenu}
+                  open={historyOpen}
+                  onClose={() => setHistoryOpen(false)}
+                  portal
+                  autoFocus
+                  anchor={
+                    <Button
+                      className={css.runPickerTrigger}
+                      variant="outline"
+                      aria-label={t('run')}
+                      aria-haspopup="menu"
+                      aria-expanded={historyOpen}
+                      disabled={busy}
+                      onClick={() => setHistoryOpen(open => !open)}
+                    >
+                      <span className={css.runPickerValue}>
+                        <span>
+                          {run.feature.name}{' · '}{t(`modelingState_${run.state}`)}
+                        </span>
+                        <span className={css.caption}>
+                          {run.materialLabel}{' · '}{run.updatedAt.slice(0, 19).replace('T', ' ')}
+                        </span>
+                      </span>
+                      <IconChevronDownOutlineRegular aria-hidden="true" />
+                    </Button>
+                  }
+                >
+                  <section
+                    className={`${css.panel} ${css.historyOptions}`}
+                    aria-label={t('run')}
+                  >
+                    <ul className={css.list}>
+                      {visibleRuns.map(item => (
+                        <li
+                          key={item.id}
+                          className={css.historyRow}
+                          data-state={item.state}
+                          data-selected={run.id === item.id}
+                        >
+                          <Button
+                            className={css.historyButton}
+                            variant="ghost"
+                            role="menuitem"
+                            aria-label={t('modelingSelectRun', { name: item.feature.name, id: item.id })}
+                            aria-current={run.id === item.id ? 'true' : undefined}
+                            disabled={busy}
+                            onClick={() => {
+                              change({ modelingRun: item.id })
+                              setHistoryOpen(false)
+                              setDeleteTarget(undefined)
+                              setDeleteError(undefined)
+                            }}
+                          >
+                            <span className={css.historyHeader}>
+                              <strong title={item.feature.name}>
+                                {item.feature.name}
+                              </strong>
+                              <span className={css.badge}>
+                                {t(`modelingState_${item.state}`)}
+                              </span>
+                            </span>
+                            <span className={css.historyMeta}>
+                              <span className={css.caption}>
+                                {item.materialLabel}{' · '}
+                                <time dateTime={item.updatedAt}>
+                                  {item.updatedAt.slice(0, 19).replace('T', ' ')}
+                                </time>
+                              </span>
+                              <RunHistoryStatus
+                                t={t}
+                                run={item}
+                              />
+                            </span>
+                            {item.stale && (
+                              <span className={css.caption}>
+                                {t('modelingStale')}
+                              </span>
+                            )}
+                          </Button>
+                          {modelRunDeletable(item.state) && (
+                            <div className={css.historyActions}>
+                              <Button
+                                className={css.deleteRecord}
+                                variant="outline"
+                                disabled={busy || !remote}
+                                aria-label={t('modelingDeleteRunLabel', { name: item.feature.name, id: item.id })}
+                                aria-expanded={deleteTarget === item.id}
+                                onClick={() => {
+                                  setDeleteError(undefined)
+                                  setDeleteTarget(current => current === item.id ? undefined : item.id)
+                                }}
+                              >
+                                {t('modelingDeleteRun')}
+                              </Button>
+                            </div>
+                          )}
+                          {deleteTarget === item.id && modelRunDeletable(item.state) && (
+                            <div className={css.deleteConfirmation}>
+                              <p>
+                                {t('modelingDeleteRunHint')}
+                              </p>
+                              {deleteError && (
+                                <div
+                                  className={css.error}
+                                  role="alert"
+                                >
+                                  <strong>
+                                    {t(`modelingError_${deleteError.problem ?? 'unavailable'}`)}
+                                  </strong>
+                                  {deleteError.detail && (
+                                    <span>
+                                      {deleteError.detail}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              <div className={css.actions}>
+                                <Button
+                                  className={css.secondary}
+                                  variant="outline"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setDeleteTarget(undefined)
+                                    setDeleteError(undefined)
+                                  }}
+                                >
+                                  {t('modelingKeepRun')}
+                                </Button>
+                                <Button
+                                  className={css.deleteRecord}
+                                  variant="outline"
+                                  disabled={busy || !remote}
+                                  onClick={() => void deleteRun(item.id)}
+                                >
+                                  {t('modelingConfirmDeleteRun')}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {runs.length > RECENT_RUN_COUNT && (
+                      <Button
+                        className={css.secondary}
+                        variant="outline"
+                        aria-expanded={view.modelingShowOlderRuns ?? false}
+                        onClick={() => change({ modelingShowOlderRuns: !view.modelingShowOlderRuns })}
+                      >
+                        {view.modelingShowOlderRuns
+                          ? t('modelingRecentRuns')
+                          : t('modelingOlderRuns', { count: runs.length - RECENT_RUN_COUNT })}
+                      </Button>
+                    )}
+                  </section>
+                </Menu>
                 {activeCount > 0 && (
                   <p className={css.caption}>
                     {t('modelingActiveCount', { count: activeCount })}
                   </p>
                 )}
-                <label className={css.labeledField}>
-                  <span>
-                    {t('run')}
-                  </span>
-                  <select
-                    value={run.id}
-                    onChange={event => change({ modelingRun: event.target.value })}
-                  >
-                    {runs.map(item => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {`${item.feature.name} · ${t(`modelingState_${item.state}`)} · ${item.materialLabel} · ${item.updatedAt.slice(0, 19)}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
               {view.page === 'models' ? (
                 <ModelPreview
@@ -410,6 +580,66 @@ export function ModelingPanel({ t, view, change, remote, openFile, openSession }
   )
 }
 
+function RunHistoryStatus({ t, run }: { t: Props['t']; run: ModelingRunView }) {
+  switch (run.state) {
+    case 'queued':
+      return (
+        <span className={css.caption}>
+          {t('modelingRunQueued')}
+        </span>
+      )
+    case 'running':
+      return (
+        <span className={css.historyProgress}>
+          <span>
+            {t(`modelingStage_${run.stage}`)}
+          </span>
+          <progress
+            aria-label={t('modelingProgress')}
+            max={modelingStages.length - 1}
+            value={run.completed.filter(stage => stage !== 'finished').length}
+          />
+        </span>
+      )
+    case 'cancelling':
+      return (
+        <span className={css.historyNotice}>
+          {t('modelingRunCancelling')}
+        </span>
+      )
+    case 'succeeded':
+      return (
+        <span className={css.historyOutcome}>
+          {(run.validationIssues ?? 0) > 0
+            ? t('modelingValidationIssues', { count: run.validationIssues! })
+            : t('modelingIssuesSummary', { gaps: run.gaps ?? 0, relations: run.relationIssues ?? 0 })}
+        </span>
+      )
+    case 'failed':
+      return (
+        <span
+          className={css.historyFailure}
+          title={run.detail}
+        >
+          {t(`modelingStage_${run.stage}`)}{' · '}
+          {run.problem ? t(`modelingError_${run.problem}`) : t('modelingState_failed')}
+        </span>
+      )
+    case 'cancelled':
+      return (
+        <span className={css.caption}>
+          {t('modelingRunCancelled', { stage: t(`modelingStage_${run.stage}`) })}
+        </span>
+      )
+    case 'interrupted':
+      return (
+        <span className={css.historyNotice}>
+          {t('modelingReconcile')}
+        </span>
+      )
+  }
+}
+
 function RunDetails({ t, run, busy, act, showModels, openFile, openSession }: {
   t: Props['t']; run: ModelingRunView; busy: boolean; act: (action: 'cancel' | 'reconcile') => void
   showModels: () => void; openFile: Props['openFile']; openSession: Props['openSession']
@@ -426,6 +656,11 @@ function RunDetails({ t, run, busy, act, showModels, openFile, openSession }: {
         <p className={css.path}>
           {run.id}
         </p>
+        {(run.validationIssues ?? 0) > 0 && (
+          <p className={css.notice}>
+            {t('modelingValidationIssues', { count: run.validationIssues! })}
+          </p>
+        )}
         {((run.gaps ?? 0) > 0 || (run.relationIssues ?? 0) > 0) && (
           <p className={css.notice}>
             {t('modelingIssuesSummary', { gaps: run.gaps ?? 0, relations: run.relationIssues ?? 0 })}
@@ -743,6 +978,7 @@ function ModelPreview({ t, run, baselineId, view, change, remote, openFile }: {
               t={t}
               runId={run.id}
               file={file}
+              kind={kind === 'ExternalScenario' || kind === 'Statechart' || kind === 'DialogMap' ? kind : 'Environment'}
               revisionId={revisionId}
               opened={opened}
               draft={draft}

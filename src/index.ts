@@ -19,6 +19,7 @@ import { OriginalSkillTools } from './host/original-skill-tools.ts'
 import { modelingCommandSchema, modelingRunSchema, type ModelingCommand, type ModelingResult } from './shared/modeling-api.ts'
 import { ModelCommitQueue, ModelingService } from './host/modeling-service.ts'
 import { DshModelingRuntime } from './host/modeling-runtime.ts'
+import { languageServiceUrlsSchema } from './shared/model-editor.ts'
 import { converterUrlSchema, defaultConverterUrl } from './host/model-editor-converter.ts'
 
 export const inject = ['workspaceRegistry', 'storageDomain', 'typert', 'remoteAccess']
@@ -64,7 +65,7 @@ class WorkbenchProjects extends TypertRemoteService {
 /** @param ctx - Host services; all contributions and storage handles belong to this fiber. @param config - Optional validated material and directory scan limits. */
 export async function apply(ctx: Context, config?: unknown): Promise<void> {
   const options = z.object({ maxMaterialBytes: z.number().optional(), maxDocumentXmlBytes: z.number().optional(), maxProjectScanEntries: z.number().optional(),
-    itemization: itemizationConfigSchema.optional(), modelEditor: z.object({ converterBaseUrl: converterUrlSchema.default(defaultConverterUrl) }).strict().optional(),
+    itemization: itemizationConfigSchema.optional(), modelEditor: z.object({ converterBaseUrl: converterUrlSchema.default(defaultConverterUrl), languageServiceUrls: languageServiceUrlsSchema.optional() }).strict().optional(),
   }).strict().parse(config ?? {})
   const { itemization: executionOptions, modelEditor, ...resourceOptions } = options
   const limits = resolveProjectConfig(resourceOptions), execution = executionOptions ?? itemizationConfigSchema.parse({})
@@ -96,7 +97,7 @@ export async function apply(ctx: Context, config?: unknown): Promise<void> {
   ctx.effect(() => () => service.close(), 'workbench: itemization lifetime')
   const modelingTable = domain.table('modeling')
   models = new ModelingService(projects, { list: () => [...modelingTable.entries()].map(([, value]) => value), put: run => modelingTable.put(run.id, run) },
-    execution, limits, commits, error => ctx.logger.warn(`Workbench modeling: ${error instanceof Error ? error.message : 'unknown failure'}`), modelEditor?.converterBaseUrl)
+    execution, limits, commits, error => ctx.logger.warn(`Workbench modeling: ${error instanceof Error ? error.message : 'unknown failure'}`), modelEditor?.converterBaseUrl, modelEditor?.languageServiceUrls)
   const modelService = models
   await modelService.recover()
   ctx.effect(() => () => modelService.close(), 'workbench: modeling lifetime')

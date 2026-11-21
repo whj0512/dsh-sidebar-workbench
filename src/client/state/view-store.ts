@@ -22,6 +22,7 @@ export interface View {
   sameVersion: boolean
   modelingSelection?: { baselineId: string; featureIds: string[] }
   modelingRun?: string
+  modelingShowOlderRuns?: boolean
   modelingSearch?: string
   modelingFilter?: 'all' | 'current' | 'attention'
   modelingDrafts?: Record<string, ModelFileDraft>

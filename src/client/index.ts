@@ -15,8 +15,10 @@ import { createViewStore } from './state/view-store.ts'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import { remoteContribution } from '../shared/remote.ts'
 import { materialFiles } from './features/project/file-lookup.ts'
+import { modelingResponse } from './features/models/modeling-response.ts'
 import stylesheet from './styles/Workbench.module.css?inline'
 import itemizationStylesheet from './features/project/ItemizationPanel.module.css?inline'
+import flowStylesheet from './features/models/flow/canvas.css?inline'
 import modelingStylesheet from './features/models/ModelingPanel.module.css?inline'
 
 export const inject = ['slots', 'locale', 'sidebarRightTabs', 'workspaces', 'remote', 'uiWorkspace']
@@ -48,7 +50,7 @@ function install(ctx: Context): void {
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.plugin = WORKBENCH_ID
-    style.textContent = `${stylesheet}\n${itemizationStylesheet}\n${modelingStylesheet}`
+    style.textContent = `${stylesheet}\n${itemizationStylesheet}\n${modelingStylesheet}\n${flowStylesheet}`
     document.head.append(style)
     return () => style.remove()
   }, 'workbench: stylesheet') // Register the stylesheet for the workbench
@@ -72,8 +74,7 @@ function install(ctx: Context): void {
             const snapshot = data.source(sessionId).getSnapshot()
             if (snapshot.phase !== 'ready' || !snapshot.workspace) return { ok: false, problem: 'unbound' }
             const response = await ctx.remote.workbench.modeling({ ...request, sessionId, workspaceId: snapshot.workspace.workspaceId })
-            if (!response.ok) throw new Error(response.error.code)
-            return response.value
+            return modelingResponse(request, response)
           },
           listFiles: async query => {
             const snapshot = data.source(sessionId).getSnapshot()

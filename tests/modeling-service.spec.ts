@@ -9,12 +9,13 @@ import { sha256, writeOwned } from '../src/host/itemization-files.ts'
 import { ModelCommitQueue, ModelingService } from '../src/host/modeling-service.ts'
 import { ModelingStore } from '../src/host/modeling-store.ts'
 import { ModelEditorConverter } from '../src/host/model-editor-converter.ts'
-import type { ModelingRuntime } from '../src/host/modeling-runtime.ts'
+import { ModelEditorStore } from '../src/host/model-editor-store.ts'
+import { ModelExecutionError, type ModelingRuntime, type ModelingStage } from '../src/host/modeling-runtime.ts'
 import { resolveProjectConfig } from '../src/host/material-inspection.ts'
 import type { ProjectService } from '../src/host/project-service.ts'
 import { candidateReferenceSchema, materialVersionSchema } from '../src/shared/itemization.ts'
 import { itemizationConfigSchema } from '../src/shared/itemization-api.ts'
-import { modelRunActive, modelingResultSchema, type ModelingAction, type ModelingRun } from '../src/shared/modeling-api.ts'
+import { modelRunActive, modelingResultSchema, type ModelKind, type ModelingAction, type ModelingRun } from '../src/shared/modeling-api.ts'
 
 const identities = { sessionId: 's1', workspaceId: 'w1' }
 const sourceText = '# 2 Drive\nDrive shall stop when Brake requests stop.\n'
@@ -67,9 +68,11 @@ async function fixture({ parallel = false, editor = false } = {}) {
   const service = createService()
   dispose.push(() => service.close())
   const options = { edge: true, invalid: false, pause: false, dialog: false, invalidParse: false,
+    corruptRequirements: false, invalidEvidence: false, invalidDelta: false, invalidFinalContract: false,
+    omit: [] as string[], failAt: undefined as ModelingStage | undefined, invalidSyntax: undefined as ModelKind | undefined,
     beforeParse: undefined as ((input: Parameters<ModelingRuntime['open']>[0]) => Promise<void>) | undefined,
     beforeEnvironment: undefined as ((signal: AbortSignal) => Promise<void>) | undefined }
-  const retries: string[] = []
+  const calls = { execute: [] as ModelingStage[], requirements: [] as boolean[], registry: 0, syntax: [] as ModelKind[] }
   let entered: () => void
   const waiting = new Promise<void>(resolve => { entered = resolve })
   const runtime: ModelingRuntime = { open: async input => {
@@ -83,32 +86,33 @@ async function fixture({ parallel = false, editor = false } = {}) {
     const quote = braking ? 'Brake shall hold.' : 'Drive shall stop when Brake requests stop.'
     const section = braking ? '3' : '2'
     await input.onSession(parallel ? `controlled-${run.id}` : 'controlled-session')
-    const save = (file: string, value: unknown) => write(`${input.directory}/${file}`, value).catch(async error => {
+    const save = (file: string, value: unknown) => options.omit.includes(file) ? Promise.resolve() : write(`${input.directory}/${file}`, value).catch(async error => {
       if (error.code !== 'EEXIST') throw error
       await writeFile(join(root, input.directory, file), typeof value === 'string' ? value : JSON.stringify(value))
     })
     return {
-      execute: async (step, feedback) => {
+      execute: async step => {
+        calls.execute.push(step)
+        if (options.failAt === step) throw new ModelExecutionError('model', `Execution failed at ${step}`)
         if (step === 'parse') {
-          if (feedback) retries.push(feedback)
           entered()
           await options.beforeParse?.(input)
           if (options.pause) {
             input.signal.throwIfAborted()
             await new Promise<void>((_resolve, reject) => input.signal.addEventListener('abort', () => reject(input.signal.reason), { once: true }))
           }
-          await save('requirements.json', { schema_version: '1.0', run_id: run.id, feature_id: run.feature.id,
+          await save('requirements.json', options.corruptRequirements ? '{' : { schema_version: '1.0', run_id: run.id, feature_id: run.feature.id,
             source: { path: join(root, input.source), sha256: run.sourceSha256 }, requirements: [
               { requirement_id: 'REQ-1', source_location: { section, start_line: 2, end_line: 2 },
                 source_text: quote, requirement_type: 'behavior', responsibility_scope: 'current_system',
                 expected_results: ['Drive stops'], testability: 'testable', reason: '' },
             ] })
           await save('entity_registry.json', { functions: [{ entities: { pages: options.dialog ? [{ name: 'Home' }] : [] } }] })
-          await save('if-then.md', options.invalidParse && !feedback ? 'IF Brake requests stop THEN Drive stops'
+          await save('if-then.md', options.invalidParse ? 'IF Brake requests stop THEN Drive stops'
             : 'IF Brake requests stop THEN Drive stops // [derivation: null] [requirement_id: REQ-1]')
           await save('relation_delta.json', { schema_version: '2.0', source_function: run.feature.name, relations: options.edge ? [
             { source: run.feature.name, target: braking ? 'Drive' : 'Brake', relation_type: 'dependency', subtype: 'service_dependency', is_inferred: false,
-              evidence: [{ section_id: section, text: quote }] },
+              evidence: [{ section_id: section, text: options.invalidDelta ? 'Unsupported relation' : quote }] },
           ] : [] })
           return
         }
@@ -121,13 +125,20 @@ async function fixture({ parallel = false, editor = false } = {}) {
         }[step]
         await save(model[0]!, model[1]!)
         await save(`${step}.evidence.json`, step === 'Statechart' ? [{ requirement_id: 'REQ-1', result: 'Drive stops',
-          file: model[0], element: 'Stop', code: 'to: Stopped' }] : [])
+          file: model[0], element: 'Stop', code: options.invalidEvidence ? 'to: Invented' : 'to: Stopped' }] : [])
       },
-      validateRequirements: async () => {},
+      validateRequirements: async mapped => {
+        calls.requirements.push(mapped)
+        if (mapped && options.invalidFinalContract) throw new Error('Invalid final DSL contract')
+      },
       validateEntityRegistry: async () => {
-        if (options.invalidParse && retries.length === 0) throw new Error('Invalid entity shape')
+        calls.registry++
+        if (options.invalidParse) throw new Error('Invalid entity shape')
       },
-      validateSyntax: async () => {}, close: async () => {},
+      validateSyntax: async models => {
+        calls.syntax.push(...new Set(models.map(model => model.kind)))
+        if (models.some(model => model.kind === options.invalidSyntax)) throw new Error(`Invalid ${options.invalidSyntax} syntax`)
+      }, close: async () => {},
     }
   } }
   service.setRuntime(runtime)
@@ -137,12 +148,12 @@ async function fixture({ parallel = false, editor = false } = {}) {
     await expect.poll(() => !modelRunActive(records.get(runId)!.state) && !service.unsettled(id), { timeout: 12000 }).toBe(true)
     return records.get(runId)!
   }
-  return { root, id, featureId, brakeId, baseline, service, createService, records, options, retries, waiting, execute, start, settle, adopt, addCandidate }
+  return { root, id, featureId, brakeId, baseline, service, createService, records, options, calls, waiting, execute, start, settle, adopt, addCandidate }
 }
 
 it('stores separate editor revisions, preserves originals and adopts with publication CAS', async () => {
   const convert = vi.spyOn(ModelEditorConverter.prototype, 'sync').mockImplementation(async (_kind, _grammar, draft) =>
-    ({ text: draft.text, graph: { nodes: [], edges: [] } }))
+    ({ text: draft.text, graph: { nodes: [], edges: [] }, wire: { nodes: [], transitions: [] } }))
   const validate = vi.spyOn(ModelEditorConverter.prototype, 'validate').mockResolvedValue('checked')
   try {
     const f = await fixture({ editor: true })
@@ -152,6 +163,12 @@ it('stores separate editor revisions, preserves originals and adopts with public
     const file = 'Statecharts/Drive.dsl'
     const query = { runId: run.id, revisionId: null, file }
     const original = (await f.execute({ ...query, action: 'editor-open' })).editor!
+    expect(original.languageServiceUrl).toBe('ws://127.0.0.1:3000')
+    const converted = await f.execute({ ...query, action: 'editor-convert', hash: original.hash!,
+      draft: { text: original.text!, changes: [] } })
+    expect(converted.editor?.render).toEqual({
+      kind: 'Statechart', data: JSON.stringify({ nodes: [], transitions: [] }),
+    })
     expect((await f.execute({ ...query, action: 'editor-open', file: '../Drive.dsl' })).problem).toBe('invalid')
     expect((await f.service.execute({ ...query, action: 'editor-open', ...identities, workspaceId: 'denied' })).ok).toBe(false)
     const text = original.text!.replace('to: Stopped', 'to: Start')
@@ -163,7 +180,7 @@ it('stores separate editor revisions, preserves originals and adopts with public
     const saved = saves.find(result => result.ok)!.editor!
     const revisionId = saved.revision!.id
     expect(saved.review).toEqual(['REQ-1'])
-    expect(JSON.parse(saved.map!).coverage[0]).toMatchObject({ status: 'missing', artifacts: [], uncovered_assertions: ['Drive stops'] })
+    expect(JSON.parse(saved.map!).coverage[0]).toMatchObject({ status: 'missing', artifacts: ['Statecharts/Drive.dsl#Drive'], uncovered_assertions: ['Drive stops'] })
     expect(await readFile(join(f.root, saved.revision!.path, 'model', file), 'utf8')).toBe(text)
     expect(await readFile(join(f.root, 'workbench-runs', run.id, 'model', file), 'utf8')).toBe(original.text)
     const restarted = f.createService()
@@ -187,11 +204,11 @@ it('stores separate editor revisions, preserves originals and adopts with public
 
 it('keeps a failed run editable and blocks adoption of an incomplete model', async () => {
   const convert = vi.spyOn(ModelEditorConverter.prototype, 'sync').mockImplementation(async (_kind, _grammar, draft) =>
-    ({ text: draft.text, graph: { nodes: [], edges: [] } }))
+    ({ text: draft.text, graph: { nodes: [], edges: [] }, wire: { nodes: [], transitions: [] } }))
   try {
     const f = await fixture({ editor: true })
     await f.adopt()
-    f.options.invalid = true
+    f.options.failAt = 'Statechart'
     const run = await f.settle((await f.start()).acceptedRunId!)
     expect(run.state).toBe('failed')
     const query = { runId: run.id, revisionId: null, file: 'Environment.dsl' }
@@ -209,16 +226,177 @@ it('keeps a failed run editable and blocks adoption of an incomplete model', asy
   } finally { convert.mockRestore() }
 }, 30000)
 
-it('reports IF/THEN and entity validation errors together and retries the parse once', async () => {
+it('can adopt a previously saved revision with assertion-only artifact references', async () => {
+  const validate = vi.spyOn(ModelEditorConverter.prototype, 'validate').mockResolvedValue('checked')
+  try {
+    const f = await fixture({ editor: true })
+    await f.adopt()
+    const run = await f.settle((await f.start()).acceptedRunId!)
+    const store = new ModelEditorStore(run, new ModelingStore(f.root, f.id, 1_000_000), 1_000_000)
+    const map = JSON.parse((await store.map())!)
+    map.coverage[0].artifacts = ['Statecharts/Drive.dsl#Stop']
+    const revision = await store.save(undefined, undefined, await store.models(), {}, JSON.stringify(map, null, 2) + '\n', [], async () => {})
+    expect((await f.execute({ action: 'editor-adopt', runId: run.id, revisionId: revision.id, publication: 1 })).ok).toBe(true)
+  } finally { validate.mockRestore() }
+}, 30000)
+
+it('validates parse outputs once, records failures and continues through publication without another model request', async () => {
   const f = await fixture()
   await f.adopt()
   f.options.invalidParse = true
   const started = await f.start()
   const run = await f.settle(started.acceptedRunId!)
   expect(run.state, run.detail).toBe('succeeded')
-  expect(f.retries).toHaveLength(1)
-  expect(f.retries[0]).toContain('entity_registry.json: Invalid entity shape')
-  expect(f.retries[0]).toContain('if-then.md needs IF')
+  expect(f.calls).toEqual({ execute: ['parse', 'Environment', 'ExternalScenario', 'Statechart'],
+    requirements: [false, true], registry: 1, syntax: ['Environment', 'ExternalScenario', 'Statechart'] })
+  expect(run.validationIssues).toBe(2)
+  const report = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'validation.json'), 'utf8'))
+  expect(report).toMatchObject({ passed: false, policy: 'continue', issues: [
+    { stage: 'parse', path: 'entity_registry.json', detail: 'Invalid entity shape' },
+    { stage: 'parse', path: 'if-then.md', detail: expect.stringContaining('if-then.md needs IF') },
+  ] })
+  expect((await new ModelingStore(f.root, f.id, 1_000_000).read())?.runId).toBe(run.id)
+}, 30000)
+
+it.each(['Environment', 'ExternalScenario', 'Statechart', 'DialogMap'] as const)('continues after one failed %s syntax check', async kind => {
+  const f = await fixture()
+  await f.adopt()
+  f.options.dialog = true
+  f.options.invalidSyntax = kind
+  const run = await f.settle((await f.start()).acceptedRunId!)
+  expect(run).toMatchObject({ state: 'succeeded', stage: 'finished', validationIssues: 1 })
+  expect(f.calls.execute).toEqual(['parse', 'Environment', 'ExternalScenario', 'Statechart', 'DialogMap'])
+  expect(f.calls.syntax).toEqual(['Environment', 'ExternalScenario', 'Statechart', 'DialogMap'])
+  const report = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'validation.json'), 'utf8'))
+  expect(report).toMatchObject({ passed: false, issues: [{ stage: kind, detail: `Invalid ${kind} syntax` }] })
+  const map = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'model/requirement_dsl_map.json'), 'utf8'))
+  expect(map.coverage[0].status).toBe(kind === 'Statechart' ? 'missing' : 'covered')
+}, 30000)
+
+it('publishes after cross-file, evidence and final contract failures without retrying any stage', async () => {
+  const f = await fixture()
+  await f.adopt()
+  f.options.invalid = true
+  f.options.invalidEvidence = true
+  f.options.invalidFinalContract = true
+  const run = await f.settle((await f.start()).acceptedRunId!)
+  expect(run).toMatchObject({ state: 'succeeded', stage: 'finished', validationIssues: 3, gaps: 1 })
+  expect(f.calls.execute).toEqual(['parse', 'Environment', 'ExternalScenario', 'Statechart'])
+  expect(f.calls.requirements).toEqual([false, true])
+  const report = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'validation.json'), 'utf8'))
+  expect(report.issues.map((issue: { detail: string }) => issue.detail)).toEqual([
+    expect.stringContaining('does not declare Interaction Unknown'),
+    expect.stringContaining('Unverified DSL location or assertion'),
+    'Invalid final DSL contract',
+  ])
+  const map = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'model/requirement_dsl_map.json'), 'utf8'))
+  expect(map.coverage[0]).toMatchObject({ status: 'missing', artifacts: ['Statecharts/Drive.dsl#Drive'], assertions: [] })
+  const restarted = f.createService()
+  dispose.push(() => restarted.close())
+  f.records.set(run.id, { ...run, state: 'running', stage: 'publish' })
+  await restarted.recover()
+  expect((await restarted.execute({ ...identities, action: 'inspect' })).runs?.[0])
+    .toMatchObject({ state: 'succeeded', validationIssues: 3 })
+}, 30000)
+
+it.each(['malformed', 'missing'])('continues with %s parse outputs and records unavailable mapping without inventing requirements', async mode => {
+  const f = await fixture()
+  await f.adopt()
+  f.options.corruptRequirements = mode === 'malformed'
+  if (mode === 'missing') f.options.omit = ['requirements.json', 'entity_registry.json', 'if-then.md', 'relation_delta.json',
+    'ExternalScenarios/stop.dsl', 'ExternalScenario.evidence.json']
+  const run = await f.settle((await f.start()).acceptedRunId!)
+  expect(run.state, run.detail).toBe('succeeded')
+  expect(f.calls.execute).toEqual(['parse', 'Environment', 'ExternalScenario', 'Statechart'])
+  expect(run.validationIssues).toBeGreaterThan(0)
+  const report = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'validation.json'), 'utf8'))
+  expect(report).toMatchObject({ passed: false, mappingAvailable: false })
+  const map = JSON.parse(await readFile(join(f.root, 'workbench-runs', run.id, 'model/requirement_dsl_map.json'), 'utf8'))
+  expect(map).toMatchObject({ run_id: run.id, feature_id: f.featureId, coverage: [] })
+  expect((await new ModelingStore(f.root, f.id, 1_000_000).read())?.runId).toBe(run.id)
+}, 30000)
+
+it.each([false, true])('retains existing relation contributions when the new delta is invalid (previous publication: %s)', async published => {
+  const f = await fixture()
+  await f.adopt()
+  const previous = published ? await f.settle((await f.start()).acceptedRunId!) : undefined
+  f.options.invalidDelta = true
+  const run = await f.settle((await f.start()).acceptedRunId!)
+  expect(run).toMatchObject({ state: 'succeeded', validationIssues: 1, relationIssues: 1 })
+  const publication = (await new ModelingStore(f.root, f.id, 1_000_000).read())!
+  expect(publication.runId).toBe(run.id)
+  const relations = JSON.parse(await readFile(join(f.root, publication.relations.path), 'utf8'))
+  expect(relations.relations.map((edge: { relation_type: string }) => edge.relation_type))
+    .toEqual(published ? ['inclusion', 'dependency'] : ['inclusion'])
+  expect(relations.consistency_issues[0]).toMatchObject({ source_run_id: previous?.id ?? null })
+}, 30000)
+
+it('persists deletion of completed and failed records while preserving published artifacts and request deduplication', async () => {
+  const f = await fixture()
+  await f.adopt()
+  const key = randomUUID()
+  const run = await f.settle((await f.start(key)).acceptedRunId!)
+  expect(run.state).toBe('succeeded')
+  const publication = new ModelingStore(f.root, f.id, 1_000_000)
+  const published = await publication.read()
+  const artifact = run.artifacts.find(item => item.path.endsWith('/model/requirements.json'))!
+  const original = await readFile(join(f.root, artifact.path), 'utf8')
+  const deletion = { action: 'delete-run', runId: run.id } as const
+  expect(await f.execute(deletion)).toMatchObject({ ok: true, deletedRunId: run.id, runs: [] })
+  const deleted = f.records.get(run.id)!
+  expect(deleted.deletedAt).toBeTruthy()
+  expect(await f.execute(deletion)).toMatchObject({ ok: true, deletedRunId: run.id, runs: [] })
+  expect((await f.execute({ action: 'inspect' })).runs).toEqual([])
+  expect(f.records.get(run.id)?.sequence).toBe(deleted.sequence)
+  expect((await f.start(key)).acceptedRunId).toBe(run.id)
+  expect((await f.execute({ action: 'artifact', runId: run.id, path: artifact.path })).content).toBe(original)
+  expect(await publication.read()).toEqual(published)
+
+  const restarted = f.createService()
+  dispose.push(() => restarted.close())
+  await restarted.recover()
+  expect(await restarted.execute({ ...identities, action: 'inspect' })).toMatchObject({ ok: true, runs: [] })
+  f.options.failAt = 'Statechart'
+  const failed = await f.settle((await f.start()).acceptedRunId!)
+  expect(failed.state).toBe('failed')
+  expect(await f.execute({ action: 'delete-run', runId: failed.id })).toMatchObject({ ok: true, deletedRunId: failed.id, runs: [] })
+  expect((await f.execute({ action: 'inspect' })).runs).toEqual([])
+  expect(f.records.get(failed.id)?.deletedAt).toBeTruthy()
+  expect(await publication.read()).toEqual(published)
+}, 30000)
+
+it('acknowledges a committed deletion even when the unrelated baseline index cannot be inspected', async () => {
+  const f = await fixture()
+  await f.adopt()
+  const run = await f.settle((await f.start()).acceptedRunId!)
+  const index = f.baseline.artifacts.find(item => item.path.endsWith('/index.json'))!
+  const path = join(f.root, index.path)
+  await writeFile(path, (await readFile(path, 'utf8')) + '\n')
+  expect((await f.execute({ action: 'inspect' })).problem).toBe('changed')
+  expect(await f.execute({ action: 'delete-run', runId: run.id })).toEqual({ ok: true, deletedRunId: run.id })
+  expect(f.records.get(run.id)?.deletedAt).toBeTruthy()
+}, 30000)
+
+it('rejects deleting live, interrupted and cancelled records or records owned by another project', async () => {
+  const f = await fixture()
+  await f.adopt()
+  f.options.pause = true
+  const id = (await f.start()).acceptedRunId!
+  await f.waiting
+  const deletion = { action: 'delete-run', runId: id } as const
+  expect((await f.execute(deletion)).problem).toBe('run-not-deletable')
+  expect(await f.service.execute({ ...identities, ...deletion, workspaceId: 'denied' }))
+    .toMatchObject({ ok: false, problem: 'unbound' })
+  await f.execute({ action: 'cancel', runId: id })
+  const cancelled = await f.settle(id)
+  for (const state of ['queued', 'running', 'cancelling', 'cancelled', 'interrupted'] as const) {
+    f.records.set(id, { ...cancelled, state })
+    expect((await f.execute(deletion)).problem).toBe('run-not-deletable')
+    expect(f.records.get(id)?.deletedAt).toBeUndefined()
+  }
+  f.records.set(id, { ...cancelled, state: 'failed', projectId: randomUUID() })
+  expect((await f.execute(deletion)).problem).toBe('identity')
+  expect(f.records.get(id)?.deletedAt).toBeUndefined()
 }, 30000)
 
 it('gives Environment a full hour after parsing and records any timeout against that stage', async () => {
@@ -261,7 +439,7 @@ it('gives Environment a full hour after parsing and records any timeout against 
   expect(await new ModelingStore(f.root, f.id, 1_000_000).read()).toBeUndefined()
 }, 30000)
 
-it('admits only an adopted baseline, deduplicates submission and publishes only validated replacements', async () => {
+it('admits only an adopted baseline, deduplicates submission and preserves the publication on execution failure', async () => {
   const f = await fixture()
   expect((await f.service.execute({ action: 'inspect', workspaceId: 'other', sessionId: 's1' })).problem).toBe('unbound')
   expect((await f.start()).problem).toBe('unreviewed')
@@ -278,11 +456,11 @@ it('admits only an adopted baseline, deduplicates submission and publishes only 
   const relations = JSON.parse(await readFile(join(f.root, published.relations.path), 'utf8'))
   expect(relations.relations.map((edge: { relation_type: string }) => edge.relation_type)).toEqual(['inclusion', 'dependency'])
   expect((await f.execute({ action: 'artifact', runId: first, path: '../other.md' })).problem).toBe('invalid')
-  f.options.invalid = true
+  f.options.failAt = 'Statechart'
   const failed = await f.settle((await f.start()).acceptedRunId!)
-  expect(failed.detail).toContain('does not declare')
+  expect(failed).toMatchObject({ state: 'failed', problem: 'model', detail: 'Execution failed at Statechart' })
   expect((await manifest.read())?.runId).toBe(first)
-  f.options.invalid = false
+  f.options.failAt = undefined
   f.options.edge = false
   f.options.dialog = true
   const replacement = await f.settle((await f.start()).acceptedRunId!)

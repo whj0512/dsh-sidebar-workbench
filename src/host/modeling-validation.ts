@@ -105,6 +105,59 @@ const commentsAndStrings = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[\s\S]*?\*\/
 const withoutComments = (value: string) => value.replace(commentsAndStrings, token => token.startsWith('/') ? token.replace(/[^\r\n]/g, ' ') : token)
 const syntaxOnly = (value: string) => value.replace(commentsAndStrings, token => token.replace(/[^\r\n]/g, ' '))
 
+// Only standalone comments immediately preceding a declaration belong to it.
+function leadingComments(text: string, code: string, start: number): string {
+  const previous = code.slice(0, start).trimEnd().length
+  if (!previous) return text.slice(0, start)
+  const newline = text.indexOf('\n', previous)
+  return newline >= 0 && newline < start ? text.slice(newline + 1, start) : ''
+}
+
+function blockEnd(syntax: string, brace: number): number {
+  let depth = 1
+  for (let i = brace + 1; i < syntax.length; i++) {
+    if (syntax[i] === '{') depth++
+    if (syntax[i] === '}' && --depth === 0) return i
+  }
+  return -1
+}
+
+// A trace names the model implementing or describing a requirement. It can
+// exist even when the generated DSL does not prove any expected result.
+function annotatedArtifacts(models: readonly ModelSource[], ids: ReadonlySet<string>) {
+  const artifacts = new Map<string, Set<string>>()
+  const add = (model: ModelSource, element: string, source: string) => {
+    for (const [token] of source.matchAll(commentsAndStrings)) {
+      if (!token.startsWith('/')) continue
+      for (const marker of token.matchAll(/\brequirement_ids?\s*[:：]\s*([\p{L}\p{N}_.-]+(?:\s*[,，、]\s*[\p{L}\p{N}_.-]+)*)|\[([\p{L}\p{N}_.-]+)\]/giu)) {
+        for (const id of (marker[1] ?? marker[2]!).split(/\s*[,，、]\s*/)) {
+          if (!ids.has(id)) continue
+          const refs = artifacts.get(id) ?? new Set<string>()
+          refs.add(`${model.path}#${element}`)
+          artifacts.set(id, refs)
+        }
+      }
+    }
+  }
+  for (const model of models) {
+    const syntax = syntaxOnly(model.text)
+    if (model.kind === 'Environment') {
+      const code = withoutComments(model.text)
+      for (const match of syntax.matchAll(/\b(?:Machine|Human|Device|Controller|ControlUnit|FunctionalModule)\s+([^\s{};]+)\s*;|\bInteraction\s+([^\s{};]+)\s*\{/g)) {
+        add(model, (match[1] ?? match[2])!, leadingComments(model.text, code, match.index))
+      }
+    } else {
+      // Each of these grammars defines one named root per file.
+      const root = /^\s*(Scenario|Statechart|DialogMap)\s+([^\s{};]+)\s*\{/.exec(syntax)
+      if (root?.[1] === (model.kind === 'ExternalScenario' ? 'Scenario' : model.kind)) {
+        const end = blockEnd(syntax, root[0].length - 1)
+        if (end >= 0) add(model, root[2]!, model.text.slice(0, end + 1))
+      }
+    }
+  }
+  return artifacts
+}
+
 function locateAssertion(model: ModelSource, element: string, requirement: string): string | undefined {
   const masked = syntaxOnly(model.text)
   const declaration = [...masked.matchAll(/\b(?:Scenario|Statechart|State|Condition|Call|Transition|DialogMap|Page)\s+([^\s{};]+)\s*\{/g)]
@@ -112,40 +165,53 @@ function locateAssertion(model: ModelSource, element: string, requirement: strin
   if (declaration.length !== 1) return
   const start = declaration[0]!.index!
   const brace = start + declaration[0]![0].lastIndexOf('{')
-  let depth = 1
-  let end = brace + 1
-  for (; depth && end < masked.length; end++) {
-    if (masked[end] === '{') depth++
-    if (masked[end] === '}') depth--
-  }
+  const end = blockEnd(masked, brace)
+  if (end < 0) return
   const preceding = model.text.slice(0, start).split(/\r?\n/).slice(-3).join('\n')
   const segment = preceding + model.text.slice(start, end)
   const hasId = [...segment.matchAll(commentsAndStrings)].some(match => match[0].startsWith('/') &&
     match[0].split(/[\s,;:\[\]]+/).includes(requirement))
-  return hasId ? withoutComments(model.text.slice(brace + 1, end - 1)) : undefined
+  return hasId ? withoutComments(model.text.slice(brace + 1, end)) : undefined
 }
 
-export function makeMapping(requirements: Requirements, models: readonly ModelSource[], reports: Partial<Record<ModelKind, unknown>>) {
+export function makeMapping(requirements: Requirements, models: readonly ModelSource[], reports: Partial<Record<ModelKind, unknown>>,
+  onIssue?: (kind: ModelKind, error: unknown, requirementId?: string) => void, includeAnnotations = true) {
   const mapped = new Map(requirements.requirements.map(item => [item.requirement_id, item]))
+  const artifacts = includeAnnotations ? annotatedArtifacts(models, new Set(mapped.keys())) : undefined
   const assertions = new Map<string, Map<string, Set<string>>>()
   for (const kind of modelKinds) {
     if (!(kind in reports)) continue
-    for (const row of modelReceipts.parse(reports[kind])) {
-      const item = mapped.get(row.requirement_id)
-      const model = models.find(file => file.path === row.file && file.kind === kind)
-      if (!item || item.testability !== 'testable' || !item.expected_results.includes(row.result) || !model || kind === 'Environment') {
-        throw new Error(`Invalid DSL assertion for ${row.requirement_id} (${row.file})`)
+    const report = reports[kind]
+    if (!Array.isArray(report)) {
+      const error = new Error(`Invalid ${kind} evidence array`)
+      if (!onIssue) throw error
+      onIssue(kind, error)
+      continue
+    }
+    for (const value of report) {
+      let requirementId: string | undefined
+      try {
+        const row = modelReceipts.element.parse(value)
+        const item = mapped.get(row.requirement_id)
+        requirementId = item?.requirement_id
+        const model = models.find(file => file.path === row.file && file.kind === kind)
+        if (!item || item.testability !== 'testable' || !item.expected_results.includes(row.result) || !model || kind === 'Environment') {
+          throw new Error(`Invalid DSL assertion for ${row.requirement_id} (${row.file})`)
+        }
+        const source = locateAssertion(model, row.element, item.requirement_id)
+        if (!source || !snippet(source).includes(snippet(row.code))
+          || !/[=<>!]|\b(?:to|action|display_text|Postcondition|Ensure|Expectation|Assert|Then|Transition|Widget)\b/i.test(row.code)) {
+          throw new Error(`Unverified DSL location or assertion: ${row.file}#${row.element} (${item.requirement_id})`)
+        }
+        const byResult = assertions.get(item.requirement_id) ?? new Map<string, Set<string>>()
+        const refs = byResult.get(row.result) ?? new Set<string>()
+        refs.add(`${row.file}#${row.element}`)
+        byResult.set(row.result, refs)
+        assertions.set(item.requirement_id, byResult)
+      } catch (error) {
+        if (!onIssue) throw error
+        onIssue(kind, error, requirementId)
       }
-      const source = locateAssertion(model, row.element, item.requirement_id)
-      if (!source || !snippet(source).includes(snippet(row.code))
-        || !/[=<>!]|\b(?:to|action|display_text|Postcondition|Ensure|Expectation|Assert|Then|Transition|Widget)\b/i.test(row.code)) {
-        throw new Error(`Unverified DSL location or assertion: ${row.file}#${row.element} (${item.requirement_id})`)
-      }
-      const byResult = assertions.get(item.requirement_id) ?? new Map<string, Set<string>>()
-      const refs = byResult.get(row.result) ?? new Set<string>()
-      refs.add(`${row.file}#${row.element}`)
-      byResult.set(row.result, refs)
-      assertions.set(item.requirement_id, byResult)
     }
   }
   return { schema_version: '1.0', run_id: requirements.run_id, feature_id: requirements.feature_id,
@@ -155,7 +221,9 @@ export function makeMapping(requirements: Requirements, models: readonly ModelSo
       const uncovered = item.expected_results.filter(result => !covered.includes(result))
       const status = item.testability !== 'testable' ? item.testability
         : !covered.length ? 'missing' : uncovered.length ? 'partial' : 'covered'
-      return { requirement_id: item.requirement_id, status, artifacts: [...new Set([...claims?.values() ?? []].flatMap(refs => [...refs]))],
+      const refs = new Set(artifacts?.get(item.requirement_id))
+      for (const locations of claims?.values() ?? []) for (const location of locations) refs.add(location)
+      return { requirement_id: item.requirement_id, status, artifacts: includeAnnotations ? [...refs].sort() : [...refs],
         assertions: covered, uncovered_assertions: item.testability === 'testable' ? uncovered : [],
         reason: item.testability !== 'testable' ? item.reason : uncovered.length ? 'DSL evidence incomplete' : '' }
     }) }

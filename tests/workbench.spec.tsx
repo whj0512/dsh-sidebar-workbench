@@ -168,7 +168,10 @@ it('opens only the matching modeling run in its execution Session and keeps item
     await screen.findByText(run.id)
     expect(started.map(item => item.feature.id)).toEqual([secondFeature.id, feature.id])
     expect(screen.getByText('Modeling runs in progress: 2')).toBeTruthy()
-    fireEvent.change(screen.getByRole('combobox', { name: en.run }), { target: { value: newerRun.id } })
+    fireEvent.click(screen.getByRole('button', { name: en.run }))
+    fireEvent.click(screen.getByRole('menuitem', {
+      name: translator(en)('modelingSelectRun', { name: newerRun.feature.name, id: newerRun.id }),
+    }))
     expect(screen.getByText(newerRun.id)).toBeTruthy()
     expect(screen.queryByRole('region', { name: en.itTitle })).toBeNull()
     expect(itemization).not.toHaveBeenCalled()

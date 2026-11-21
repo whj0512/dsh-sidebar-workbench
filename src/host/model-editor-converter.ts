@@ -177,7 +177,7 @@ export class ModelEditorConverter {
     if (await validateOutput(roundtrip) !== original || !equalMarkers(roundtrip)) {
       throw new ModelEditorError('converter-loss', `${kind} round trip changed DSL declarations, references or requirement markers`)
     }
-    if (!draft.changes.length) return { text: draft.text, graph: base.graph }
+    if (!draft.changes.length) return { text: draft.text, graph: base.graph, wire: base.wire }
     try { base.apply(draft.changes) }
     catch (error) { throw new ModelEditorError('converter-loss', errorText(error)) }
     const edited = await backward(base.wire)
@@ -195,6 +195,6 @@ export class ModelEditorConverter {
       || !fieldsMatch) {
       throw new ModelEditorError('converter-loss', 'BAIC did not preserve the edited graph fields or requirement markers')
     }
-    return { text: edited, graph: result.graph }
+    return { text: edited, graph: result.graph, wire: result.wire }
   }
 }

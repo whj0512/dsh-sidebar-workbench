@@ -24,7 +24,7 @@ export type ModelingStage = 'parse' | ModelKind
 export type ModelInput = { run: ModelingRun; directory: string; source: string; chunks: string; relations: string; sourceRelative: string;
   assets: Record<string, string>; allowedReads: string[]; signal: AbortSignal; onSession: (id: string) => Promise<void> }
 export interface ModelingAgent {
-  execute(stage: ModelingStage, feedback?: string): Promise<void>
+  execute(stage: ModelingStage): Promise<void>
   validateRequirements(ids: boolean): Promise<void>
   validateEntityRegistry(): Promise<void>
   validateSyntax(models: ModelSource[]): Promise<void>
@@ -81,7 +81,6 @@ export class DshModelingRuntime implements ModelingRuntime {
     const stageReferences = new Map<ModelingStage, { skill: string; reference: string }>()
     let stage: ModelingStage | undefined
     const keep = new Set<string>()
-    const tries = new Map<ModelingStage, number>()
     const checks = new Map<string, number>()
     const normalize = (path: string) => {
       const portable = path.replaceAll('\\', '/')
@@ -236,7 +235,7 @@ export class DshModelingRuntime implements ModelingRuntime {
       }
       opened = true
       return {
-        execute: async (step, feedback) => {
+        execute: async step => {
           signal.throwIfAborted()
           stage = step
           const { skill, reference } = stageReferences.get(step)!
@@ -257,16 +256,14 @@ export class DshModelingRuntime implements ModelingRuntime {
                 ].join('\n')
               : [
                   `输入：${parseOutputs.slice(0, 3).join('、')}${step !== 'Environment' ? '、Environment.dsl' : ''}。`,
-                  step === 'Environment' ? 'Environment.evidence.json 写入 []。'
-                    : '证据数组项为 {requirement_id,result,file,element,code}。result 逐字引用 expected_results，file 用相对路径，element 填唯一声明名，code 摘录实现结果的语句。无证据的结果省略。用 // requirement_ids: ID 标记。',
+                  step === 'Environment'
+                    ? '在每个有原文依据的组件或 Interaction 声明前独立一行写 // requirement_ids: 实际ID，多个 ID 用逗号分隔。包括有对应实体的外部依赖和数据定义。Environment.evidence.json 为结果断言数组，写入 []。'
+                    : '在模型声明前独立一行用 // requirement_ids: 实际ID 列出该模型承载的需求，在实现具体结果的声明前标注对应 ID。证据数组项为 {requirement_id,result,file,element,code}。result 逐字引用 expected_results，file 用相对路径，element 填唯一声明名，code 摘录声明体内体现结果的赋值、目标状态或显示动作等实际语句。仅有交互名、声明头或注释时保留需求标注，省略该结果断言。',
                 ].join('\n'),
             imageIndex ? `图片：从 ${imageIndex} 查路径，仅在原文引用时用 read_image 查看。`
               : allowedImages.size ? '无法读取引用图片时，将图中待核实的信息留为疑点。' : '',
-            feedback ? `校验反馈，请在当前阶段修正：\n${feedback}` : '',
           ].filter(Boolean).join('\n')
-          const attempt = (tries.get(step) ?? 0) + 1
-          tries.set(step, attempt)
-          await writeOwned(run.root, `workbench-runs/${run.id}/prompts/${step}-${attempt}.txt`, prompt)
+          await writeOwned(run.root, `workbench-runs/${run.id}/prompts/${step}-1.txt`, prompt)
           try {
             handle.agent.followup(createUserMessage({ source: { kind: 'workbench-modeling', runId: run.id, stage: step }, content: [{ type: 'text', text: prompt }] }))
             await handle.agent.whenIdle()

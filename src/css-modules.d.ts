@@ -4,7 +4,12 @@ declare module '*.module.css' {
   export default classes
 }
 
-declare module '*.module.css?inline' {
+declare module '*.css?inline' {
   const stylesheet: string
   export default stylesheet
+}
+
+declare module 'workbench:monaco-worker' {
+  const source: string
+  export default source
 }
